@@ -254,6 +254,16 @@
     $id('assignTitle').textContent = isZaal ? `Zaalknop: ${zaalOf(id).label}` : labelOf(id);
     $id('assignSub').textContent = isZaal ? '' : seatOf(id)?.regel2 || '';
     $id('rowLabel').hidden = !isZaal;
+    const seat = isZaal ? null : seatOf(id);
+    $id('seatEdit').hidden = !seat;
+    $id('seatEdit').open = false;
+    if (seat) {
+      f.sNaam.value = seat.naam || '';
+      f.sFractie.innerHTML = '<option value="">— geen fractie —</option>' +
+        plan.fracties.filter((x) => x.key !== 'geen').map((x) => `<option value="${esc(x.key)}">${esc(x.naam)}</option>`).join('');
+      f.sFractie.value = seat.fractie && seat.fractie !== 'geen' ? seat.fractie : '';
+      f.sMic.value = seat.mic ?? '';
+    }
     f.label.value = zaalOf(id)?.label ?? '';
     f.camera.innerHTML = cfg.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
     f.camera.value = a?.camera ?? selCam;
@@ -298,6 +308,31 @@
   }
 
   $id('aCancel').addEventListener('click', closeAssign);
+
+  // "Zetelgegevens opslaan": naam, fractie en micropostnummer van de zetel bewaren
+  $id('sSave').addEventListener('click', async () => {
+    const f = $id('formAssign');
+    const seat = seatOf(editingId);
+    if (!seat) return;
+    const naam = f.sNaam.value.trim();
+    if (!naam) { toast('Een zetel heeft een naam nodig'); return; }
+    const mic = f.sMic.value === '' ? null : Number(f.sMic.value);
+    if (mic !== null && (!Number.isInteger(mic) || mic < 1)) { toast('Ongeldig micropostnummer'); return; }
+    const dup = mic !== null && plan.seats.find((s) => s.id !== seat.id && s.mic === mic);
+    if (dup) { toast(`Micropost ${mic} is al gekoppeld aan ${dup.naam}`); return; }
+    const oldNaam = plan.fracties.find((x) => x.key === seat.fractie)?.naam ?? '';
+    const newKey = f.sFractie.value || 'geen';
+    const newNaam = plan.fracties.find((x) => x.key === newKey && newKey !== 'geen')?.naam ?? '';
+    // regel2 toont de fractienaam: meebewegen als ze nog overeenkomt (of leeg was)
+    if (!seat.regel2 || seat.regel2 === oldNaam) seat.regel2 = newNaam;
+    seat.naam = naam;
+    seat.fractie = newKey;
+    if (mic === null) delete seat.mic; else seat.mic = mic;
+    const r = await run(api.savePlan(plan));
+    if (!r.ok) return;
+    closeAssign();
+    renderAll();
+  });
 
   // "Wissen": koppeling verwijderen (de preset in de camera blijft bestaan)
   $id('aClear').addEventListener('click', async () => {
@@ -372,7 +407,7 @@
    */
   const rowsData = () => [
     ...cfg.zaal.map((z) => ({ id: z.id, naam: z.label, fractie: 'Zaal' })),
-    ...plan.seats.filter(isSpeaker).map((s) => ({ id: s.id, naam: s.naam, fractie: plan.fracties.find((f) => f.key === s.fractie)?.naam ?? '' })),
+    ...plan.seats.filter(isSpeaker).map((s) => ({ id: s.id, naam: s.naam, mic: s.mic ?? null, fractie: plan.fracties.find((f) => f.key === s.fractie && f.key !== 'geen')?.naam ?? '' })),
   ].map((r) => ({ ...r, camera: cfg.assign[r.id]?.camera ?? null, preset: cfg.assign[r.id]?.preset ?? null }));
 
   /** Maakt de DataTables-tabel (DataTables 2.x) en koppelt de knoppen "Oproepen" en "Bewerken". */
@@ -380,11 +415,12 @@
     table = new DataTable('#map', {
       data: rowsData(),
       pageLength: 25,
-      order: [[2, 'asc']],
+      order: [[3, 'asc']],
       language: { search: 'Zoeken:', lengthMenu: '_MENU_ per pagina', info: '_START_–_END_ van _TOTAL_', zeroRecords: 'Geen resultaten' },
       columns: [
         { title: 'Naam', data: 'naam', render: (d) => esc(d) },
         { title: 'Fractie', data: 'fractie', render: (d) => esc(d) },
+        { title: 'Micropost', data: 'mic', defaultContent: '', width: '80px', render: (d) => d ?? '' },
         // Niet-gekoppelde rijen sorteren achteraan (99)
         { title: 'Camera', data: 'camera', defaultContent: '', render: (d, t) => (d ? (t === 'display' ? esc(camName(d)) : d) : (t === 'display' ? '<span class="mute">niet gekoppeld</span>' : 99)) },
         { title: 'Preset', data: 'preset', defaultContent: '', width: '70px', render: (d) => d ?? '' },

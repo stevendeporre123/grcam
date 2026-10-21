@@ -62,7 +62,7 @@
       };
       const two = Boolean(s.regel2);
       html += `<g class="${cls}" data-id="${esc(s.id)}" transform="translate(${px(s.cx).toFixed(2)} ${py(s.cy).toFixed(2)}) rotate(${s.ang || 0})">` +
-        `<title>${esc(s.naam)}${s.regel2 ? ' · ' + esc(s.regel2) : ''}${a ? ` → camera ${a.camera}, preset ${a.preset}` : ''}</title>` +
+        `<title>${esc(s.naam)}${s.regel2 ? ' · ' + esc(s.regel2) : ''}${s.mic ? ` · micropost ${esc(s.mic)}` : ''}${a ? ` → camera ${a.camera}, preset ${a.preset}` : ''}</title>` +
         `<rect class="base" x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" rx="2" fill="#1f252d" stroke="${stroke}" stroke-width="${sw}"/>` +
         (a ? `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" rx="2" fill="${camColor(a.camera)}" fill-opacity="0.32" pointer-events="none"/>` : '') +
         line(s.naam, two ? -1.5 : fs * 0.35, fs) +

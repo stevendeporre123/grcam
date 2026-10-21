@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('api', {
   getPlan: () => call('plan:get'),
   /** Zittingsplan importeren uit een backup-bestand ({fracties, seats}). @param {object} p */
   importPlan: (p) => call('plan:import', p),
+  /** Zittingsplan bewaren (na bewerken van zetels). @param {object} p */
+  savePlan: (p) => call('plan:save', p),
   /** Preset oproepen. @param {number} camera @param {number} preset VISCA 0-127 */
   preset: (camera, preset) => call('cam:preset', { camera, preset }),
   /** Huidige positie opslaan in een preset (overschrijft). */

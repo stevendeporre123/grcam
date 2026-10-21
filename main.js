@@ -112,9 +112,25 @@ function loadPlan() {
  */
 function importPlan(p) {
   if (!p || !Array.isArray(p.fracties) || !Array.isArray(p.seats)) throw new Error('Geen geldig zittingsplan-bestand');
-  const plan = { ...loadPlan(), fracties: p.fracties, seats: p.seats };
+  const old = loadPlan();
+  // Micropostnummers (alleen in deze app bijgehouden) blijven behouden per zetel-id.
+  const mics = Object.fromEntries(old.seats.filter((s) => s.mic).map((s) => [s.id, s.mic]));
+  const seats = p.seats.map((s) => (mics[s.id] && !s.mic ? { ...s, mic: mics[s.id] } : s));
+  const plan = { ...old, fracties: p.fracties, seats };
   fs.writeFileSync(planPath(), JSON.stringify(plan));
   return plan;
+}
+
+/**
+ * Bewaart het volledige zittingsplan (na het bewerken van zetels: naam, fractie, micropostnummer).
+ * @param {{fracties:object[], seats:object[]}} p
+ * @returns {object} het bewaarde plan
+ * @throws {Error} als het plan ongeldig is
+ */
+function savePlan(p) {
+  if (!p || !Array.isArray(p.fracties) || !Array.isArray(p.seats)) throw new Error('Ongeldig zittingsplan');
+  fs.writeFileSync(planPath(), JSON.stringify(p));
+  return p;
 }
 
 /**
@@ -231,6 +247,7 @@ const handlers = {
   'cfg:save': (_e, next) => { saveConfig(next); return true; },
   'plan:get': () => loadPlan(),
   'plan:import': (_e, p) => importPlan(p),
+  'plan:save': (_e, p) => savePlan(p),
 
   'cam:preset': (_e, { camera, preset }) => sendVisca(camera, visca.presetRecall(camById(camera).viscaAddr, preset)),
   'cam:presetStore': (_e, { camera, preset }) => sendVisca(camera, visca.presetStore(camById(camera).viscaAddr, preset)),

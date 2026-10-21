@@ -25,6 +25,10 @@ Tests: `npm test`. Windows-exe: `npm run dist`, of via GitHub Actions: push een 
 3. Klik de zetel en kies **Opslaan in camera** (positie wordt in de camera bewaard onder dat presetnummer en gekoppeld), of **Enkel koppelen** voor een preset die al in de camera staat. Nieuwe koppelingen krijgen als voorstel presetnummer 20 of hoger, zodat bestaande presets niet overschreven worden.
 4. Voor de zaalknoppen werkt het hetzelfde; daar kan je ook de naam van de knop aanpassen.
 
+## Zetels aanpassen
+
+Beheer → **Bewerken** bij een zetel → *Zetel bewerken*: naam, fractie (of geen fractie) en micropostnummer. Cameranummers: Beheer → Instellingen → **Test** per camera; cameramarkeringen sleep je op het plan in Inleren-modus.
+
 ## Beheer
 
 Tabel met alle zetels en zaalknoppen (DataTables), instellingen, verkeerslog, en **Zittingsplan importeren**: kies een backup-bestand van de zittingsplan-pagina om zetels en namen bij te werken. De koppelingen blijven behouden zolang de zetel-id's gelijk blijven.

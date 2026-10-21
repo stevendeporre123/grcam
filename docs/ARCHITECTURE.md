@@ -58,7 +58,8 @@ Elk antwoord heeft de vorm `{ ok: true, data }` of `{ ok: false, error }`.
 | `cfg:get` | – | geeft de config |
 | `cfg:save` | config | valideert/merget en bewaart de config |
 | `plan:get` | – | geeft het zittingsplan |
-| `plan:import` | `{fracties, seats}` | vervangt het plan (backup-formaat van de zittingsplan-pagina) |
+| `plan:import` | `{fracties, seats}` | vervangt het plan (backup-formaat van de zittingsplan-pagina); `mic` per zetel-id blijft behouden |
+| `plan:save` | `{fracties, seats, ...}` | bewaart het volledige plan na het bewerken van zetels |
 | `cam:preset` | `{camera, preset}` | preset oproepen |
 | `cam:presetStore` | `{camera, preset}` | huidige positie opslaan (overschrijft) |
 | `cam:home` | `{camera}` | home-positie |
@@ -94,7 +95,8 @@ de `*.default.json` bestanden zijn enkel de startwaarden.
 ```jsonc
 {
   "fracties": [ { "key": "...", "naam": "...", "kleur": "#rrggbb" } ],
-  "seats": [ { "id": "...", "naam": "...", "regel2": "...", "fractie": "...", "groep": "...",
+  "seats": [ { "id": "...", "naam": "...", "regel2": "...", "fractie": "...|geen", "groep": "...", "mic": 12,   // mic = Televic-micropostnummer (optioneel)
+              
                "cx": 0, "cy": 0, "w": 60, "h": 24, "ang": 0, "fs": 8, "rand": "zwart|fractie" } ],
   "bg": { "x": 0, "y": 0, "w": 568, "h": 806 },
   "decor": { "frame": { "cx": 0, "cy": 0, "w": 0, "h": 0 }, "greyfills": [ { "cx": 0, "cy": 0, "w": 0, "h": 0 } ] }
@@ -130,7 +132,10 @@ Op de router: *External Control* → TCP/IP On, protocol Generic ASCII, een Prof
   Zicht 'Zicht ambtenarenbank' = plan 180° gedraaid, tekst blijft leesbaar.
 * **Inleren** (checkbox): klik op zetel opent een modal. *Opslaan in camera* = `presetStore` + koppeling;
   *Enkel koppelen* = alleen de koppeling; *Wissen* = koppeling verwijderen. Voorstel voor een nieuw presetnummer: ≥ 20.
-* **Beheer**: DataTables 2.x overzicht (alle zetels + zaalknoppen), instellingen, plan-import, test van alle camera's, log.
+* **Zetel bewerken**: in de modal (Beheer → Bewerken, of Inleren → klik zetel) klap *Zetel bewerken* open: naam, fractie
+  (of geen fractie) en micropostnummer. Het micropostnummer moet uniek zijn en is bedoeld voor een latere koppeling met de
+  Televic API (wie spreekt?). Een import van het plan behoudt de micropostnummers.
+* **Beheer**: DataTables 2.x overzicht (alle zetels + zaalknoppen, met micropostnummer), instellingen, plan-import, test van alle camera's, log.
 * De UI krijgt enkel `window.api` (contextIsolation aan, geen Node in de renderer, CSP-meta in index.html).
 
 ## 8. Testen

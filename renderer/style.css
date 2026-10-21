@@ -67,3 +67,6 @@ body.learning .cam { cursor:grab; }
 #dlgSettings { max-width:620px; width:90vw; }
 .camrow > * { min-width:0; width:100%; box-sizing:border-box; }
 .camrow input { padding:6px 8px; }
+#seatEdit { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+#seatEdit summary { cursor:pointer; color:var(--mute); }
+#seatEdit label { margin-top:8px; }

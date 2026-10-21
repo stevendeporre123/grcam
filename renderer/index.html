@@ -70,6 +70,13 @@
       <h3 id="assignTitle">Koppelen</h3>
       <p id="assignSub" class="mute"></p>
       <label id="rowLabel">Naam van de knop <input name="label" type="text" maxlength="30"></label>
+      <details id="seatEdit">
+        <summary>Zetel bewerken (naam, fractie, micropost)</summary>
+        <label>Naam <input name="sNaam" type="text" maxlength="60"></label>
+        <label>Fractie <select name="sFractie"></select></label>
+        <label>Micropostnummer (Televic, optioneel) <input name="sMic" type="number" min="1" max="999" placeholder="geen"></label>
+        <button type="button" id="sSave">Zetelgegevens opslaan</button>
+      </details>
       <label>Camera <select name="camera"></select></label>
       <label>Preset (0-127) <input name="preset" type="number" min="0" max="127" required></label>
       <p class="hint">"Opslaan in camera" bewaart de huidige positie van de gekozen camera onder dit presetnummer en overschrijft wat er stond. "Enkel koppelen" gebruikt een preset die al in de camera staat.</p>
