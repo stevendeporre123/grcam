@@ -27,6 +27,10 @@ const speakers = plan.seats.filter(isSpeaker);
 assert.ok(speakers.length > 50 && speakers.length < plan.seats.length);
 assert.ok(!isSpeaker({ naam: 'Fractiemedewerker', groep: 'x' }));
 assert.ok(!isSpeaker({ naam: 'Pers', groep: 'Pers' }));
+assert.ok(isSpeaker({ naam: 'Pers 1', groep: 'Pers', spreker: true }));
+assert.ok(!isSpeaker({ naam: 'Rudy', groep: 'College', spreker: false }));
+assert.ok(plan.seats.some((s) => s.id === 'spreker' && isSpeaker(s)));
+assert.strictEqual(plan.seats.filter((s) => s.groep === 'Pers' && isSpeaker(s)).length, 3);
 assert.ok(isSpeaker({ naam: 'Rudy Coddens', groep: 'College' }));
 
 // gedraaid zicht: posities gespiegeld om het kadermidden, tekst rechtop (geen rotate(180))

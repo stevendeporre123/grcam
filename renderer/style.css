@@ -70,3 +70,4 @@ body.learning .cam { cursor:grab; }
 #seatEdit { border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
 #seatEdit summary { cursor:pointer; color:var(--mute); }
 #seatEdit label { margin-top:8px; }
+#seatEdit .chk { flex-direction:row; align-items:center; gap:8px; }

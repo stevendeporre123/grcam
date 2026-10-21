@@ -17,8 +17,12 @@
   /** Escapet tekst voor gebruik in HTML/SVG. @param {any} s @returns {string} */
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-  /** Zetels waar iemand spreekt; medewerkers, kabinetten en pers zijn niet aanklikbaar. */
-  const isSpeaker = (s) => !['Kabinetten', 'Pers'].includes(s.groep) && !/medewerker|vertrouwenspersoon/i.test(s.naam);
+  /**
+   * Zetels die aanklikbaar zijn (preset). Standaard: iedereen behalve medewerkers, kabinetten en pers.
+   * Een expliciet `spreker: true/false` op de zetel (instelbaar in de app) heeft voorrang.
+   */
+  const isSpeaker = (s) => (typeof s.spreker === 'boolean' ? s.spreker
+    : !['Kabinetten', 'Pers'].includes(s.groep) && !/medewerker|vertrouwenspersoon/i.test(s.naam));
 
   /**
    * Bouwt de SVG-inhoud voor het plan.

@@ -167,7 +167,8 @@
     const cam = e.target.closest('.cam');
     if (cam) { selectCamera(Number(cam.dataset.cam)); return; }
     const g = e.target.closest('.seat');
-    if (g && !g.classList.contains('off')) pick(g.dataset.id);
+    // Niet-aanklikbare zetels (bv. pers) kan je enkel in inleermodus openen, om ze aanklikbaar te maken.
+    if (g && (learn || !g.classList.contains('off'))) pick(g.dataset.id);
   });
   $id('zaalBtns').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-id]');
@@ -263,6 +264,7 @@
         plan.fracties.filter((x) => x.key !== 'geen').map((x) => `<option value="${esc(x.key)}">${esc(x.naam)}</option>`).join('');
       f.sFractie.value = seat.fractie && seat.fractie !== 'geen' ? seat.fractie : '';
       f.sMic.value = seat.mic ?? '';
+      f.sKlik.checked = isSpeaker(seat);
     }
     f.label.value = zaalOf(id)?.label ?? '';
     f.camera.innerHTML = cfg.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
@@ -326,6 +328,7 @@
     // regel2 toont de fractienaam: meebewegen als ze nog overeenkomt (of leeg was)
     if (!seat.regel2 || seat.regel2 === oldNaam) seat.regel2 = newNaam;
     seat.naam = naam;
+    seat.spreker = f.sKlik.checked;
     seat.fractie = newKey;
     if (mic === null) delete seat.mic; else seat.mic = mic;
     const r = await run(api.savePlan(plan));
