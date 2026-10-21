@@ -26,7 +26,8 @@
    * @param {Record<string,{camera:number,preset:number}>} assign zetel-id -> camera + preset
    * @param {{view?:'ambtenaren'|'zaal', cameras?:{id:number,name:string,pos?:{x:number,y:number}}[], selCam?:number}} [opts]
    *   `view` 'ambtenaren' = 180° gedraaid; `cameras` = markeringen; `selCam` = gemarkeerde camera
-   * @returns {{viewBox:string, html:string}} viewBox-waarde en de SVG-elementen
+   * @returns {{viewBox:string, html:string, flip:boolean, mx:number, my:number}} viewBox-waarde, SVG-elementen en
+   *   het spiegelpunt (nodig om schermpositie terug naar plan-coördinaten om te rekenen)
    */
   function buildPlanSvg(plan, assign, opts = {}) {
     const fr = Object.fromEntries(plan.fracties.map((f) => [f.key, f.kleur]));
@@ -81,7 +82,7 @@
 
     // Kabinetvakken steken iets voorbij het kader uit: marge rechts (of links bij gedraaid zicht).
     const x0 = flip ? bg.x - 24 : bg.x;
-    return { viewBox: `${x0} ${bg.y} ${bg.w + 24} ${bg.h}`, html };
+    return { viewBox: `${x0} ${bg.y} ${bg.w + 24} ${bg.h}`, html, flip, mx, my };
   }
 
   const api = { buildPlanSvg, isSpeaker, camColor, esc, CAM_COLORS };

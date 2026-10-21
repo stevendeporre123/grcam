@@ -56,8 +56,14 @@ dialog label { display:flex; flex-direction:column; gap:4px; margin-bottom:10px;
 dialog menu { display:flex; justify-content:flex-end; gap:8px; padding:0; flex-wrap:wrap; }
 .hint { color:var(--mute); font-size:12px; }
 fieldset { border:1px solid var(--line); border-radius:8px; margin-bottom:10px; }
-.camrow { display:grid; grid-template-columns:1.4fr 1fr 0.7fr 0.7fr; gap:6px; margin-bottom:6px; }
+.camrow { display:grid; grid-template-columns:1.4fr 1fr 0.7fr 0.8fr 0.6fr; align-items:center; gap:6px; margin-bottom:6px; }
 .dt-container { color:var(--text); } .dt-container .dt-search input, .dt-container .dt-length select { background:#262d37; color:var(--text); }
 table.dataTable tbody tr { background:transparent; } table.dataTable td, table.dataTable th { border-color:var(--line) !important; }
 table.dataTable tbody td button { padding:3px 8px; margin-right:4px; }
 .dt-container .dt-paging .dt-paging-button { color:var(--text) !important; }
+
+.camhead { font-size:11px; color:var(--mute, #8b949e); }
+body.learning .cam { cursor:grab; }
+#dlgSettings { max-width:620px; width:90vw; }
+.camrow > * { min-width:0; width:100%; box-sizing:border-box; }
+.camrow input { padding:6px 8px; }

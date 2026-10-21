@@ -40,6 +40,8 @@
   let activeId = null;
   /** Zetel- of zaal-id dat in de inleer-modal bewerkt wordt. */
   let editingId = null;
+  /** Spiegelgegevens van de laatst getekende plan (voor het slepen van camera's). */
+  let geom = { flip: false, mx: 0, my: 0 };
 
   /** @param {string} i element-id */
   const $id = (i) => document.getElementById(i);
@@ -86,7 +88,8 @@
   /** Tekent het zittingsplan (zetels, camera's, gekozen richting) in de SVG. */
   function renderPlan() {
     const svg = $id('plan');
-    const { viewBox, html } = buildPlanSvg(plan, cfg.assign, { view: cfg.view, cameras: cfg.cameras, selCam });
+    const { viewBox, html, flip, mx, my } = buildPlanSvg(plan, cfg.assign, { view: cfg.view, cameras: cfg.cameras, selCam });
+    geom = { flip, mx, my };
     svg.setAttribute('viewBox', viewBox);
     svg.innerHTML = html;
     document.querySelectorAll('#viewSel button').forEach((b) => b.classList.toggle('on', b.dataset.view === (cfg.view || 'zaal')));
@@ -173,6 +176,48 @@
   $id('camSel').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-cam]');
     if (b) selectCamera(Number(b.dataset.cam));
+  });
+
+  // ---------- Camera's verslepen (alleen in inleermodus) ----------
+
+  /**
+   * Schermpositie -> plan-coördinaten (rekening houdend met viewBox en de 180°-spiegeling).
+   * @param {PointerEvent} e
+   * @returns {{x:number, y:number}}
+   */
+  function planPoint(e) {
+    const svg = $id('plan');
+    const m = svg.getScreenCTM().inverse();
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m);
+    return geom.flip ? { x: 2 * geom.mx - p.x, y: 2 * geom.my - p.y } : { x: p.x, y: p.y };
+  }
+
+  // Sleep een cameramarkering naar de juiste plaats; de nieuwe positie wordt bewaard.
+  $id('plan').addEventListener('pointerdown', (e) => {
+    const g = e.target.closest('.cam');
+    if (!learn || !g) return;
+    const cam = cfg.cameras.find((c) => c.id === Number(g.dataset.cam));
+    if (!cam) return;
+    const startX = e.clientX; const startY = e.clientY;
+    let moved = false;
+    g.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 4) return;
+      moved = true;
+      const p = planPoint(ev);
+      cam.pos = { x: Math.round(p.x), y: Math.round(p.y) };
+      const shown = geom.flip ? { x: 2 * geom.mx - cam.pos.x, y: 2 * geom.my - cam.pos.y } : cam.pos;
+      g.setAttribute('transform', `translate(${shown.x} ${shown.y})`);
+    };
+    const up = async () => {
+      g.removeEventListener('pointermove', move);
+      g.removeEventListener('pointerup', up);
+      g.removeEventListener('pointercancel', up);
+      if (moved) await persist();
+    };
+    g.addEventListener('pointermove', move);
+    g.addEventListener('pointerup', up);
+    g.addEventListener('pointercancel', up);
   });
 
   // ---------- Inleren ----------
@@ -385,12 +430,45 @@
     el.querySelectorAll('[data-prog]').forEach((b) => b.addEventListener('click', () => run(api.program(Number(b.dataset.prog)))));
   }
 
+  /**
+   * Leest de camera-rijen uit het instellingenformulier en zet ze in `cfg.cameras`.
+   * @param {HTMLFormElement} f
+   */
+  function readCamFields(f) {
+    for (const c of cfg.cameras) {
+      c.name = f.querySelector(`[data-n="${c.id}"]`).value.trim() || c.name;
+      c.port = Number(f.querySelector(`[data-p="${c.id}"]`).value);
+      c.viscaAddr = Number(f.querySelector(`[data-a="${c.id}"]`).value);
+      c.beSource = Number(f.querySelector(`[data-b="${c.id}"]`).value);
+    }
+  }
+
+  /**
+   * Laat een camera even links-rechts bewegen zodat je ter plaatse ziet welke fysieke camera
+   * bij dit nummer hoort. Gebruikt de waarden die nu in het formulier staan (eerst bewaard).
+   * @param {number} id camera-nummer
+   */
+  async function wiggle(id) {
+    readCamFields($id('formSettings'));
+    await run(api.saveConfig(cfg));
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (const d of ['left', 'right', 'right', 'left']) {
+      const r = await run(api.move(id, d, 30));
+      if (!r.ok) return;
+      await sleep(500);
+      await run(api.move(id, 'stop'));
+      await sleep(150);
+    }
+  }
+
   // Instellingen openen: IPL-host, per camera naam/poort/VISCA-adres/BrightEye-bron, BrightEye-gegevens
   $id('btnSettings').addEventListener('click', () => {
     const f = $id('formSettings');
     f.host.value = cfg.ipl.host;
-    $id('camFields').innerHTML = '<legend>Camera\'s (naam / IPL TCP-poort / VISCA-adres / Brighteye-bron)</legend>' +
-      cfg.cameras.map((c) => `<div class="camrow"><input data-n="${c.id}" value="${esc(c.name)}"><input data-p="${c.id}" type="number" value="${c.port}"><input data-a="${c.id}" type="number" min="1" max="7" value="${c.viscaAddr}"><input data-b="${c.id}" type="number" min="0" value="${c.beSource ?? 0}"></div>`).join('');
+    $id('camFields').innerHTML = '<legend>Welke camera is welk nummer? Pas de poort aan en klik Test.</legend>' +
+      '<div class="camrow camhead"><span>Naam</span><span>IPL-poort</span><span>VISCA</span><span>Brighteye</span><span></span></div>' +
+      cfg.cameras.map((c) => `<div class="camrow"><input data-n="${c.id}" value="${esc(c.name)}"><input data-p="${c.id}" type="number" value="${c.port}"><input data-a="${c.id}" type="number" min="1" max="7" value="${c.viscaAddr}"><input data-b="${c.id}" type="number" min="0" value="${c.beSource ?? 0}"><button type="button" data-test="${c.id}">Test</button></div>`).join('');
+    $id('camFields').querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', () => wiggle(Number(b.dataset.test))));
     f.bEnabled.checked = !!cfg.brighteye.enabled;
     f.bHost.value = cfg.brighteye.host || '';
     f.bPort.value = cfg.brighteye.port || 5200;
@@ -401,12 +479,7 @@
   $id('formSettings').addEventListener('submit', async (e) => {
     const f = e.target;
     cfg.ipl.host = f.host.value.trim();
-    for (const c of cfg.cameras) {
-      c.name = f.querySelector(`[data-n="${c.id}"]`).value.trim() || c.name;
-      c.port = Number(f.querySelector(`[data-p="${c.id}"]`).value);
-      c.viscaAddr = Number(f.querySelector(`[data-a="${c.id}"]`).value);
-      c.beSource = Number(f.querySelector(`[data-b="${c.id}"]`).value);
-    }
+    readCamFields(f);
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: f.bHost.value.trim(), port: Number(f.bPort.value), dest: Number(f.bDest.value) });
     await persist();
   });
