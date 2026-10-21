@@ -20,6 +20,7 @@ main.js              Electron main-proces: config, plan, TCP, IPC, venster
 preload.js           Brug (contextBridge) → window.api
 visca.js             VISCA-commando's (Buffers)
 brighteye.js         BrightEye Generic ASCII take-opdracht
+debug-watch.js       Debugmodus: na elke camera-completion de laatste preset opvragen
 renderer/
   index.html         Markup + dialogen (CSP)
   style.css          Donker thema
@@ -67,6 +68,7 @@ Elk antwoord heeft de vorm `{ ok: true, data }` of `{ ok: false, error }`.
 | `cam:move` | `{camera, dir, speed}` | pan/tilt starten/stoppen |
 | `cam:zoom` | `{camera, dir, speed}` | zoom starten/stoppen |
 | `program:switch` | `{camera}` | BrightEye: bron van die camera naar de programma-uitgang |
+| `lastPreset` (main → renderer) | `{t, camera, preset}` | debugmodus: antwoord op de vraag "laatste preset" |
 | `log` (main → renderer) | `{t, dir, camera, hex}` | verkeerslog |
 
 ## 5. Bestandsformaten
@@ -125,6 +127,22 @@ blijven dan behouden. Koppelingen blijven bestaan zolang de zetel-id's gelijk bl
 
 `@ X:0/<bestemming>,<bron>` + CR, cijfers in ASCII-hex, 0-gebaseerd, antwoord `>`.
 Op de router: *External Control* → TCP/IP On, protocol Generic ASCII, een Profile toewijzen.
+
+### Debugmodus (laatste preset ontdekken)
+
+Doel: uitzoeken welke preset de bestaande automatisering (Televic → NI-700) bij een micropost gebruikt.
+Schakelaar in Beheer ("Debug: laatste preset tonen"; staat bij elke start uit, `config.debug`).
+
+* Aan: `main.js` houdt de verbindingen naar alle vier de camerapoorten **permanent open** (geen idle-sluiting) en
+  herstelt ze na 3 s als ze wegvallen.
+* Elk binnenkomend bericht gaat naar `debug-watch.js`. Bij een *completion* (`z0 5y FF`, y ≥ 1) volgt na 200 ms de vraag
+  `8x 09 04 3F FF` (CAM_MemoryInq). Het antwoord `y0 50 pp FF` wordt als `lastPreset` naar de UI gestuurd:
+  banner "Laatst opgeroepen: camera x preset yy" (met de zetelnaam als die preset al gekoppeld is).
+* Beschermingen: een inquiry-antwoord is zelf geen completion (geen lus); één vraag tegelijk per camera (time-out 1,5 s,
+  dan een logregel "geen antwoord"); completions kort na een eigen pan/tilt/zoom worden genegeerd.
+* Beperkingen: werkt alleen als de IPL seriële antwoorden naar álle TCP-verbindingen op die poort stuurt, en als de camera
+  CAM_MemoryInq ondersteunt. Het nummer is onbetrouwbaar als de camera daarna handmatig verstelt is.
+  Niet in een zitting gebruiken: de permanente verbindingen kunnen de automatisering hinderen.
 
 ## 7. UI
 

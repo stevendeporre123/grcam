@@ -29,6 +29,10 @@ Tests: `npm test`. Windows-exe: `npm run dist`, of via GitHub Actions: push een 
 
 Beheer → **Bewerken** bij een zetel → *Zetel bewerken*: naam, fractie (of geen fractie) en micropostnummer. Cameranummers: Beheer → Instellingen → **Test** per camera; cameramarkeringen sleep je op het plan in Inleren-modus.
 
+## Debug: preset van een micropost ontdekken
+
+Beheer → **Debug: laatste preset tonen**. Activeer in de zaal een micropost: na het antwoord van de camera vraagt de app de laatst opgeroepen preset op en toont boven het zaalplan *Laatst opgeroepen: camera x preset yy*. Koppel die daarna aan de zetel. Staat uit bij elke start; niet tijdens een zitting gebruiken.
+
 ## Beheer
 
 Tabel met alle zetels en zaalknoppen (DataTables), instellingen, verkeerslog, en **Zittingsplan importeren**: kies een backup-bestand van de zittingsplan-pagina om zetels en namen bij te werken. De koppelingen blijven behouden zolang de zetel-id's gelijk blijven.

@@ -25,7 +25,7 @@
   <div id="learnBanner" hidden>INLEREN: klik een zetel of zaalknop om een camerapositie te koppelen. Bestaande camerapresets kunnen overschreven worden. Sleep een cameranummer op het plan naar de juiste plaats.</div>
 
   <main id="viewOp" class="op">
-    <div class="planwrap"><svg id="plan" role="img" aria-label="Zittingsplan gemeenteraadszaal"></svg></div>
+    <div class="planwrap"><div id="lastPreset" hidden></div><svg id="plan" role="img" aria-label="Zittingsplan gemeenteraadszaal"></svg></div>
     <aside class="side">
       <div id="now" class="now">Kies een spreker in het plan</div>
       <div class="group-title">Zaal</div>
@@ -58,7 +58,7 @@
     </section>
     <section class="panel">
       <h2>Verkeer</h2>
-      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><button id="btnPing">Test alle camera's</button></div>
+      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><label class="dbg" title="Houdt de IPL-verbindingen open en vraagt na elk camera-antwoord de laatst opgeroepen preset op"><input type="checkbox" id="debugSw"> Debug: laatste preset tonen</label><button id="btnPing">Test alle camera's</button></div>
       <pre id="log"></pre>
     </section>
   </main>

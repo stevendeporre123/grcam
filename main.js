@@ -17,6 +17,7 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const visca = require('./visca');
+const { createWatcher } = require('./debug-watch');
 const { takeCommand } = require('./brighteye');
 
 /**
@@ -49,6 +50,26 @@ let config = null;
  */
 const conns = new Map();
 
+/**
+ * Debugmodus: na elk completion van een camera vragen we de laatst opgeroepen preset op (zie debug-watch.js).
+ * Het antwoord gaat als 'lastPreset' naar de UI (banner boven het zaalplan).
+ */
+const watcher = createWatcher({
+  getCamera: (id) => camById(id),
+  write: (id, buf) => {
+    const cam = camById(id);
+    const entry = conns.get(`${config.ipl.host}:${cam.port}`);
+    if (!entry || entry.sock.destroyed) return;
+    entry.sock.write(buf);
+    log({ dir: 'tx', camera: id, hex: `${visca.toHex(buf)}  (debug: laatste preset)` });
+  },
+  onLast: (id, preset) => {
+    log({ dir: 'info', camera: id, hex: `laatst opgeroepen: preset ${preset}` });
+    if (win && !win.isDestroyed()) win.webContents.send('lastPreset', { t: Date.now(), camera: id, preset });
+  },
+  log: (msg, id) => log({ dir: 'info', camera: id, hex: msg }),
+});
+
 /** Watchdog per camera: stopt een beweging als de operator niet loslaat of de UI hangt. @type {Map<number, NodeJS.Timeout>} */
 const watchdogs = new Map();
 
@@ -71,6 +92,7 @@ function loadConfig() {
   }
   config.ipl = { ...defaults.ipl, ...config.ipl };
   config.brighteye = { ...defaults.brighteye, ...config.brighteye };
+  config.debug = false; // debugmodus staat bij elke start uit (houdt anders IPL-verbindingen open)
   // Ontbrekende cameravelden (bv. positie op het plan) aanvullen vanuit de standaard.
   config.cameras = config.cameras.map((c) => ({ ...defaults.cameras.find((d) => d.id === c.id), ...c }));
   saveConfig(config);
@@ -176,9 +198,9 @@ function getSocket(host, port, camId) {
       conns.set(key, entry);
       resolve(entry);
     });
-    sock.on('data', (d) => log({ dir: 'rx', camera: camId, hex: visca.toHex(d) }));
+    sock.on('data', (d) => { log({ dir: 'rx', camera: camId, hex: visca.toHex(d) }); watcher.feed(camId, d); });
     sock.on('error', (e) => { conns.delete(key); reject(e); });
-    sock.on('close', () => conns.delete(key));
+    sock.on('close', () => { conns.delete(key); if (config.debug) setTimeout(openDebugConnections, 3000); });
   });
 }
 
@@ -194,7 +216,26 @@ async function sendVisca(camId, buf) {
   await new Promise((res, rej) => entry.sock.write(buf, (e) => (e ? rej(e) : res())));
   log({ dir: 'tx', camera: cam.id, hex: visca.toHex(buf) });
   clearTimeout(entry.timer);
-  entry.timer = setTimeout(() => entry.sock.destroy(), config.ipl.idleCloseMs);
+  // In debugmodus blijven de verbindingen open zodat we ook berichten van de automatisering zien.
+  if (!config.debug) entry.timer = setTimeout(() => entry.sock.destroy(), config.ipl.idleCloseMs);
+}
+
+/** Opent (indien nodig) permanente verbindingen naar alle camerapoorten; fouten komen in het log. */
+function openDebugConnections() {
+  if (!config.debug) return;
+  for (const c of config.cameras) {
+    getSocket(config.ipl.host, c.port, c.id).catch((e) => log({ dir: 'err', camera: c.id, hex: `debug: ${e.message}` }));
+  }
+}
+
+/**
+ * Past de debugmodus toe na het bewaren van de config: aan = permanente verbindingen, uit = sluiten.
+ * @param {boolean} wasOn
+ */
+function applyDebug(wasOn) {
+  watcher.setEnabled(config.debug);
+  if (config.debug) { openDebugConnections(); return; }
+  if (wasOn) for (const e of conns.values()) e.sock.destroy();
 }
 
 /**
@@ -244,7 +285,7 @@ async function brighteyeTake(camera) {
  */
 const handlers = {
   'cfg:get': () => config,
-  'cfg:save': (_e, next) => { saveConfig(next); return true; },
+  'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); return true; },
   'plan:get': () => loadPlan(),
   'plan:import': (_e, p) => importPlan(p),
   'plan:save': (_e, p) => savePlan(p),
@@ -256,12 +297,14 @@ const handlers = {
 
   'cam:move': async (_e, { camera, dir, speed }) => {
     const a = camById(camera).viscaAddr;
+    watcher.noteOwnMove(camera);
     if (dir === 'stop') clearTimeout(watchdogs.get(camera));
     else armWatchdog(camera, a);
     await sendVisca(camera, visca.panTilt(a, dir, speed));
   },
   'cam:zoom': async (_e, { camera, dir, speed }) => {
     const a = camById(camera).viscaAddr;
+    watcher.noteOwnMove(camera);
     if (dir === 'stop') clearTimeout(watchdogs.get(camera));
     else armWatchdog(camera, a);
     await sendVisca(camera, visca.zoom(a, dir, speed));

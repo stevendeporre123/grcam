@@ -16,6 +16,7 @@
     "port": 5200,
     "dest": 0
   },
+  "debug": false,
   "view": "ambtenaren",
   "zaal": [
     { "id": "zaal1", "label": "Zaal 1" },

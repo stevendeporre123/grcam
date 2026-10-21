@@ -14,6 +14,7 @@
  *  - Pan/tilt           `8x 01 06 01 VV WW 0p 0t FF` (VV pan-snelheid 1-24, WW tilt-snelheid 1-20)
  *  - Zoom               `8x 01 04 07 <00|2s|3s> FF`  (s = snelheid 1-7)
  *  - Power-inquiry      `8x 09 04 00 FF`
+ *  - Laatste preset     `8x 09 04 3F FF` (antwoord `y0 50 pp FF`)
  */
 
 /**
@@ -106,10 +107,18 @@ function zoom(a, dir, speed = 3) {
 const powerInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x04, 0x00, 0xff]);
 
 /**
+ * Vraagt het nummer van de laatst opgeroepen preset op (CAM_MemoryInq). Antwoord: `y0 50 pp FF`.
+ * Niet elke camera ondersteunt dit; het nummer is onbetrouwbaar als de camera daarna verstelt is.
+ * @param {number} a camera-adres 1-7
+ * @returns {Buffer}
+ */
+const memoryInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x04, 0x3f, 0xff]);
+
+/**
  * Bytes als leesbare hex-string, bv. `81 01 04 3f 02 05 ff` (voor het verkeerslog).
  * @param {Buffer} b
  * @returns {string}
  */
 const toHex = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ');
 
-module.exports = { presetRecall, presetStore, home, panTilt, zoom, powerInquiry, toHex };
+module.exports = { presetRecall, presetStore, home, panTilt, zoom, powerInquiry, memoryInquiry, toHex };

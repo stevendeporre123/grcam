@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/visca.test.js && node test/plan.test.js && node test/brighteye.test.js",
+    "test": "node test/visca.test.js && node test/plan.test.js && node test/brighteye.test.js && node test/debug-watch.test.js",
     "dist": "electron-builder --win portable --publish never"
   },
   "dependencies": {
@@ -25,7 +25,7 @@
       "main.js",
       "preload.js",
       "visca.js",
-      "brighteye.js",
+      "brighteye.js", "debug-watch.js",
       "config.default.json",
       "plan.default.json",
       "renderer/**",

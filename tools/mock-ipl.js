@@ -5,6 +5,7 @@
  *
  * - Poorten 2003-2006 (127.0.0.1): print ontvangen VISCA-bytes en antwoordt met ACK (`x0 41 FF`)
  *   gevolgd door completion (`x0 51 FF`), waarbij x = antwoordadres van de camera.
+ * - Beantwoordt ook `8x 09 04 3F FF` (laatste preset) met `y0 50 pp FF`.
  * - Poort 5200 (127.0.0.1): nep-BrightEye (Generic ASCII); elke opdracht eindigt op CR en krijgt '>' terug.
  *
  * Gebruik: `node tools/mock-ipl.js`, en zet in de app (Beheer -> Instellingen) de IPL-host
@@ -27,12 +28,20 @@ net.createServer((s) => {
   });
 }).listen(5200, '127.0.0.1', () => console.log('mock-Brighteye luistert op 5200'));
 
+/** Laatst opgeroepen preset per poort (voor de debug-vraag). @type {Record<number, number>} */
+const lastPreset = {};
+
 for (const port of [2003, 2004, 2005, 2006]) {
   net.createServer((s) => {
     console.log(`[${port}] verbonden`);
     s.on('data', (d) => {
       console.log(`[${port}] rx ${toHex(d)}`);
       const addr = ((d[0] & 0x07) + 8) << 4; // antwoord-adres: camera 1 antwoordt met 0x90
+      if (d[1] === 0x01 && d[2] === 0x04 && d[3] === 0x3f && d[4] === 0x02) lastPreset[port] = d[5]; // preset-oproep onthouden
+      if (d[1] === 0x09 && d[2] === 0x04 && d[3] === 0x3f) { // laatste preset opvragen
+        s.write(Buffer.from([addr, 0x50, lastPreset[port] ?? 0, 0xff]));
+        return;
+      }
       s.write(Buffer.from([addr, 0x41, 0xff, addr, 0x51, 0xff]));
     });
     s.on('close', () => console.log(`[${port}] gesloten`));

@@ -535,6 +535,22 @@
     e.target.value = '';
   });
 
+  // Debugmodus: schakelaar in Beheer; het main-proces houdt dan verbindingen open en vraagt de laatste preset op.
+  const banner = $id('lastPreset');
+  $id('debugSw').addEventListener('change', async (e) => {
+    cfg.debug = e.target.checked;
+    banner.hidden = true;
+    await persist();
+  });
+
+  // Banner boven het zaalplan: "Laatst opgeroepen: camera x preset yy" (met zetelnaam als de preset gekoppeld is)
+  api.onLastPreset((e) => {
+    const hit = Object.entries(cfg.assign).find(([, a]) => a.camera === e.camera && a.preset === e.preset);
+    const who = hit ? ` — gekoppeld aan ${labelOf(hit[0])}` : '';
+    banner.textContent = `Laatst opgeroepen: camera ${e.camera} preset ${e.preset}${who}`;
+    banner.hidden = !cfg.debug;
+  });
+
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
   $id('btnPing').addEventListener('click', () => cfg.cameras.forEach((c) => run(api.ping(c.id))));
 
@@ -557,6 +573,8 @@
     renderCamSel();
     renderProgram();
     markActive();
+    $id('debugSw').checked = Boolean(cfg.debug);
+    if (!cfg.debug) banner.hidden = true;
     if (table) refreshTable();
   }
 
