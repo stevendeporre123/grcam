@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>PTZ Backup</title>
+  <link rel="stylesheet" href="../node_modules/datatables.net-dt/css/dataTables.dataTables.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Camerabediening <span class="tag">handmatig</span></h1>
+    <nav class="tabs">
+      <button data-tab="op" class="on">Bediening</button>
+      <button data-tab="admin">Beheer</button>
+    </nav>
+    <div id="program" class="program" hidden></div>
+    <div class="spacer"></div>
+    <div class="tabs" id="viewSel" title="Richting van het plan">
+      <button data-view="ambtenaren">Zicht ambtenarenbank</button>
+      <button data-view="zaal">Zaalplan</button>
+    </div>
+    <label class="learn"><input type="checkbox" id="learn"> Inleren</label>
+  </header>
+  <div id="learnBanner" hidden>INLEREN: klik een zetel of zaalknop om een camerapositie te koppelen. Bestaande camerapresets kunnen overschreven worden.</div>
+
+  <main id="viewOp" class="op">
+    <div class="planwrap"><svg id="plan" role="img" aria-label="Zittingsplan gemeenteraadszaal"></svg></div>
+    <aside class="side">
+      <div id="now" class="now">Kies een spreker in het plan</div>
+      <div class="group-title">Zaal</div>
+      <div id="zaalBtns" class="zaal"></div>
+      <div class="group-title">Camera</div>
+      <div id="camSel" class="camsel"></div>
+      <div class="ptz">
+        <div class="pad" id="pad"></div>
+        <div class="zoom">
+          <button data-zoom="tele">Zoom +</button>
+          <button data-zoom="wide">Zoom −</button>
+          <button id="btnHome">Home</button>
+        </div>
+      </div>
+      <label class="speed">Snelheid <input type="range" id="speed" min="5" max="100" value="35"></label>
+    </aside>
+  </main>
+
+  <main id="viewAdmin" class="admin" hidden>
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Zetels en zaalknoppen <span id="assignCount" class="mute"></span></h2>
+        <div>
+          <button id="btnImportPlan">Zittingsplan importeren…</button>
+          <button id="btnSettings">Instellingen</button>
+          <input type="file" id="planFile" accept="application/json,.json" hidden>
+        </div>
+      </div>
+      <table id="map" class="display" style="width:100%"></table>
+    </section>
+    <section class="panel">
+      <h2>Verkeer</h2>
+      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><button id="btnPing">Test alle camera's</button></div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <div id="toast" role="status"></div>
+
+  <dialog id="dlgAssign">
+    <form id="formAssign" method="dialog">
+      <h3 id="assignTitle">Koppelen</h3>
+      <p id="assignSub" class="mute"></p>
+      <label id="rowLabel">Naam van de knop <input name="label" type="text" maxlength="30"></label>
+      <label>Camera <select name="camera"></select></label>
+      <label>Preset (0-127) <input name="preset" type="number" min="0" max="127" required></label>
+      <p class="hint">"Opslaan in camera" bewaart de huidige positie van de gekozen camera onder dit presetnummer en overschrijft wat er stond. "Enkel koppelen" gebruikt een preset die al in de camera staat.</p>
+      <menu>
+        <button type="button" id="aCancel">Annuleren</button>
+        <button type="button" id="aClear">Wissen</button>
+        <button type="button" id="aLink">Enkel koppelen</button>
+        <button type="button" id="aStore" class="primary">Opslaan in camera</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="dlgSettings">
+    <form method="dialog" id="formSettings">
+      <h3>Instellingen</h3>
+      <label>IPL T S6 host <input name="host" type="text" required></label>
+      <fieldset id="camFields"><legend>Camera's</legend></fieldset>
+      <fieldset>
+        <legend>Brighteye NXT-430 (optioneel)</legend>
+        <label><input name="bEnabled" type="checkbox"> Inschakelen</label>
+        <label>Host <input name="bHost" type="text"></label>
+        <label>Poort (TCP-besturing, standaard 5200) <input name="bPort" type="number"></label>
+        <label>Bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
+      </fieldset>
+      <menu>
+        <button type="button" id="setCancel">Annuleren</button>
+        <button type="submit" class="primary">Opslaan</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="../node_modules/jquery/dist/jquery.min.js"></script>
+  <script src="../node_modules/datatables.net/js/dataTables.min.js"></script>
+  <script src="plan-view.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "ipl": {
+    "host": "10.0.28.155",
+    "idleCloseMs": 2000,
+    "moveWatchdogMs": 4000
+  },
+  "cameras": [
+    { "id": 1, "name": "Camera 1", "port": 2003, "viscaAddr": 1, "beSource": 0, "pos": { "x": 8, "y": 178 } },
+    { "id": 2, "name": "Camera 2", "port": 2004, "viscaAddr": 1, "beSource": 1, "pos": { "x": 568, "y": 187 } },
+    { "id": 3, "name": "Camera 3", "port": 2005, "viscaAddr": 1, "beSource": 2, "pos": { "x": 568, "y": 603 } },
+    { "id": 4, "name": "Camera 4", "port": 2006, "viscaAddr": 1, "beSource": 3, "pos": { "x": 12, "y": 636 } }
+  ],
+  "brighteye": {
+    "enabled": false,
+    "host": "",
+    "port": 5200,
+    "dest": 0
+  },
+  "view": "ambtenaren",
+  "zaal": [
+    { "id": "zaal1", "label": "Zaal 1" },
+    { "id": "zaal2", "label": "Zaal 2" }
+  ],
+  "assign": {}
+}

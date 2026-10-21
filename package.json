@@ -1,0 +1,42 @@
+{
+  "name": "grcam",
+  "version": "0.1.0",
+  "description": "Noodbediening voor Lumens PTZ-camera's via Extron IPL T S6 (VISCA over TCP)",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/visca.test.js && node test/plan.test.js && node test/brighteye.test.js",
+    "dist": "electron-builder --win portable --publish never"
+  },
+  "dependencies": {
+    "datatables.net": "^2.1.8",
+    "datatables.net-dt": "^2.1.8",
+    "jquery": "^3.7.1"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "be.smartergrp.ptzbackup",
+    "productName": "PTZ Backup",
+    "files": [
+      "main.js",
+      "preload.js",
+      "visca.js",
+      "brighteye.js",
+      "config.default.json",
+      "plan.default.json",
+      "renderer/**",
+      "node_modules/jquery/dist/jquery.min.js",
+      "node_modules/datatables.net/js/dataTables.min.js",
+      "node_modules/datatables.net-dt/css/dataTables.dataTables.min.css",
+      "node_modules/datatables.net-dt/images/**"
+    ],
+    "win": {
+      "target": "portable",
+      "artifactName": "${productName}-${version}-portable.exe"
+    }
+  }
+}
