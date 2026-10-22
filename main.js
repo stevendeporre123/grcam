@@ -17,8 +17,9 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const visca = require('./visca');
-const { createWatcher } = require('./debug-watch');
-const { takeCommand } = require('./brighteye');
+const { createWatcher, splitMessages } = require('./debug-watch');
+const { describe, describeCommand, queryKind } = require('./visca-decode');
+const { takeCommand, statusCommand, parseStatus } = require('./brighteye');
 
 /**
  * @typedef {Object} Camera
@@ -61,14 +62,29 @@ const watcher = createWatcher({
     const entry = conns.get(`${config.ipl.host}:${cam.port}`);
     if (!entry || entry.sock.destroyed) return;
     entry.sock.write(buf);
-    log({ dir: 'tx', camera: id, hex: `${visca.toHex(buf)}  (debug: laatste preset)` });
+    logTx(id, buf, '(debug)');
   },
   onLast: (id, preset) => {
-    log({ dir: 'info', camera: id, hex: `laatst opgeroepen: preset ${preset}` });
+    log({ dir: 'info', camera: id, hex: '', text: `Laatst opgeroepen preset: ${preset}` });
     if (win && !win.isDestroyed()) win.webContents.send('lastPreset', { t: Date.now(), camera: id, preset });
   },
-  log: (msg, id) => log({ dir: 'info', camera: id, hex: msg }),
+  log: (msg, id) => log({ dir: 'info', camera: id, hex: '', text: msg }),
 });
+
+/** Laatste vraag (power/memory) per camera, om een 4-byte antwoord te kunnen duiden. @type {Map<number, 'power'|'memory'>} */
+const lastQuery = new Map();
+
+/**
+ * Logt een bericht dat we naar een camera sturen, met uitleg in gewone taal.
+ * @param {number} id
+ * @param {Buffer} buf
+ * @param {string} [extra]
+ */
+function logTx(id, buf, extra = '') {
+  const q = queryKind(buf);
+  if (q) lastQuery.set(id, q);
+  log({ dir: 'tx', camera: id, hex: visca.toHex(buf), text: [describeCommand(buf), extra].filter(Boolean).join(' ') });
+}
 
 /** Watchdog per camera: stopt een beweging als de operator niet loslaat of de UI hangt. @type {Map<number, NodeJS.Timeout>} */
 const watchdogs = new Map();
@@ -198,7 +214,24 @@ function getSocket(host, port, camId) {
       conns.set(key, entry);
       resolve(entry);
     });
-    sock.on('data', (d) => { log({ dir: 'rx', camera: camId, hex: visca.toHex(d) }); watcher.feed(camId, d); });
+    // Antwoorden komen soms byte per byte binnen: eerst samenvoegen tot een compleet bericht (eindigt op 0xFF).
+    let carry = Buffer.alloc(0);
+    let flush = null;
+    sock.on('data', (d) => {
+      const r = splitMessages(carry, d);
+      carry = r.rest;
+      for (const m of r.messages) {
+        log({ dir: 'rx', camera: camId, hex: visca.toHex(m), text: describe(m, lastQuery.get(camId)) });
+        watcher.feed(camId, m);
+      }
+      clearTimeout(flush);
+      if (carry.length) {
+        flush = setTimeout(() => {
+          log({ dir: 'rx', camera: camId, hex: visca.toHex(carry), text: 'Onvolledig bericht (geen einde ontvangen)' });
+          carry = Buffer.alloc(0);
+        }, 500);
+      }
+    });
     sock.on('error', (e) => { conns.delete(key); reject(e); });
     sock.on('close', () => { conns.delete(key); if (config.debug) setTimeout(openDebugConnections, 3000); });
   });
@@ -214,7 +247,7 @@ async function sendVisca(camId, buf) {
   const cam = camById(camId);
   const entry = await getSocket(config.ipl.host, cam.port, cam.id);
   await new Promise((res, rej) => entry.sock.write(buf, (e) => (e ? rej(e) : res())));
-  log({ dir: 'tx', camera: cam.id, hex: visca.toHex(buf) });
+  logTx(cam.id, buf);
   clearTimeout(entry.timer);
   // In debugmodus blijven de verbindingen open zodat we ook berichten van de automatisering zien.
   if (!config.debug) entry.timer = setTimeout(() => entry.sock.destroy(), config.ipl.idleCloseMs);
@@ -254,29 +287,91 @@ function armWatchdog(camId, a) {
 }
 
 /**
- * Schakelt een camera naar de programma-uitgang van de BrightEye NXT.
- * Wacht op de prompt `>` van de router voor de verbinding gesloten wordt.
+ * Vertaalt een netwerkfout naar een bruikbare melding voor de BrightEye.
+ * @param {Error & {code?:string}} e
+ * @returns {string}
+ */
+function brighteyeError(e) {
+  const b = config.brighteye;
+  if (e.code === 'ECONNREFUSED') return `Brighteye weigert de verbinding op ${b.host}:${b.port}: staat External Control → TCP/IP aan en is de poort juist?`;
+  if (e.code === 'EHOSTUNREACH' || e.code === 'ENETUNREACH' || e.code === 'ENOTFOUND') return `Brighteye ${b.host} is niet bereikbaar: controleer het IP-adres en het netwerk`;
+  if (/Time-out/i.test(e.message)) return `Brighteye ${b.host}:${b.port} antwoordt niet (time-out): controleer het IP-adres en of de besturing aanstaat`;
+  return `Brighteye-fout: ${e.message}`;
+}
+
+/**
+ * Stuurt één opdracht naar de BrightEye en wacht tot de prompt `>` terugkomt.
+ * @param {string} cmd opdracht (eindigt op CR)
+ * @param {number} [camera] camera voor het log
+ * @returns {Promise<string>} volledig antwoord van de router
+ * @throws {Error} met een leesbare melding
+ */
+async function brighteyeExchange(cmd, camera) {
+  const b = config.brighteye;
+  if (!b.enabled || !b.host) throw new Error('Brighteye-koppeling is niet ingesteld (Beheer → Instellingen)');
+  let reply = '';
+  try {
+    await new Promise((resolve, reject) => {
+      const s = net.createConnection({ host: b.host, port: b.port });
+      s.setTimeout(3000, () => s.destroy(new Error('Time-out Brighteye')));
+      s.on('connect', () => s.write(cmd));
+      s.on('data', (d) => {
+        reply += d.toString('latin1');
+        if (reply.includes('>')) s.end(); // prompt = klaar voor de volgende opdracht
+      });
+      s.on('close', resolve);
+      s.on('error', reject);
+    });
+  } catch (e) {
+    const msg = brighteyeError(e);
+    log({ dir: 'err', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: msg });
+    throw new Error(msg);
+  }
+  return reply;
+}
+
+/**
+ * Welke camera hoort bij een Brighteye-bron?
+ * @param {number} src
+ * @returns {string} bv. " (camera 2)" of ""
+ */
+const camOfSource = (src) => {
+  const c = config.cameras.find((x) => (x.beSource ?? -1) === src);
+  return c ? ` (${c.name})` : '';
+};
+
+/**
+ * Schakelt een camera naar de programma-uitgang van de BrightEye NXT en meldt wat de router terugzegt.
  * @param {number} camera
  * @returns {Promise<void>}
  */
 async function brighteyeTake(camera) {
-  const b = config.brighteye;
-  if (!b.enabled || !b.host) throw new Error('Brighteye-koppeling is niet ingesteld');
-  const cmd = takeCommand(b.dest, camById(camera).beSource);
-  await new Promise((resolve, reject) => {
-    const s = net.createConnection({ host: b.host, port: b.port });
-    let buf = '';
-    s.setTimeout(3000, () => s.destroy(new Error('Time-out Brighteye')));
-    s.on('connect', () => s.write(cmd));
-    s.on('data', (d) => {
-      buf += d.toString('latin1');
-      log({ dir: 'rx', camera, hex: `brighteye: ${JSON.stringify(d.toString('latin1'))}` });
-      if (buf.includes('>')) s.end(); // prompt = klaar voor de volgende opdracht
-    });
-    s.on('close', resolve);
-    s.on('error', reject);
+  const cam = camById(camera);
+  const cmd = takeCommand(config.brighteye.dest, cam.beSource);
+  const reply = await brighteyeExchange(cmd, camera);
+  const st = parseStatus(reply)[0];
+  log({ dir: 'tx', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: `Brighteye: ${cam.name} naar de programma-uitgang schakelen` });
+  log({
+    dir: 'rx', camera, hex: `brighteye: ${JSON.stringify(reply)}`,
+    text: st ? `Brighteye bevestigt: bestemming ${st.dest} staat nu op bron ${st.src}${camOfSource(st.src)}`
+      : 'Brighteye heeft de opdracht ontvangen (prompt), maar geeft geen status terug',
   });
-  log({ dir: 'tx', camera, hex: `brighteye: ${JSON.stringify(cmd)}` });
+}
+
+/**
+ * Vraagt de BrightEye welke bron er nu op de programma-uitgang staat.
+ * @returns {Promise<void>}
+ */
+async function brighteyeStatus() {
+  const cmd = statusCommand(config.brighteye.dest);
+  const reply = await brighteyeExchange(cmd);
+  const st = parseStatus(reply)[0];
+  log({ dir: 'tx', hex: `brighteye: ${JSON.stringify(cmd)}`, text: 'Brighteye: welke bron staat er op de programma-uitgang?' });
+  log({
+    dir: 'rx', hex: `brighteye: ${JSON.stringify(reply)}`,
+    text: st ? `Brighteye bereikbaar: programma-uitgang (bestemming ${st.dest}) staat op bron ${st.src}${camOfSource(st.src)}`
+      : 'Brighteye bereikbaar (prompt ontvangen), maar gaf geen status terug',
+  });
 }
 
 /**
@@ -311,6 +406,13 @@ const handlers = {
   },
 
   'program:switch': (_e, { camera }) => brighteyeTake(camera),
+  'program:status': () => brighteyeStatus(),
+
+  'cam:lastPreset': (_e, { camera }) => {
+    if (!config.debug) throw new Error('Zet eerst de debugschakelaar aan');
+    camById(camera);
+    watcher.ask(camera);
+  },
 };
 
 /** Maakt het hoofdvenster. De renderer draait zonder Node-toegang (contextIsolation); alles loopt via preload.js. */

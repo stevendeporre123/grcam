@@ -63,10 +63,12 @@ function createWatcher({ getCamera, write, onLast, log = () => {}, delayMs = 200
     s.scheduled = false;
     s.pending = true;
     write(camId, visca.memoryInquiry(getCamera(camId).viscaAddr));
-    s.timer = setTimeout(() => { s.pending = false; log('geen antwoord op "laatste preset"-vraag', camId); }, replyTimeoutMs);
+    s.timer = setTimeout(() => { s.pending = false; log("Geen antwoord op de vraag naar de laatste preset (de camera ondersteunt dit mogelijk niet)", camId); }, replyTimeoutMs);
   }
 
   return {
+    /** Stelt de vraag "laatste preset" meteen (bv. vanuit de testknop). @param {number} camId */
+    ask(camId) { if (enabled && !state(camId).pending) ask(camId); },
     /** @param {boolean} on */
     setEnabled(on) {
       enabled = Boolean(on);

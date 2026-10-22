@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('api', {
   move: (camera, dir, speed) => call('cam:move', { camera, dir, speed }),
   /** Zoom starten of stoppen. @param {number} camera @param {'tele'|'wide'|'stop'} dir @param {number} [speed] 1-7 */
   zoom: (camera, dir, speed) => call('cam:zoom', { camera, dir, speed }),
+  /** Debugmodus: laatst opgeroepen preset van een camera opvragen. @param {number} camera */
+  lastPreset: (camera) => call('cam:lastPreset', { camera }),
+  /** BrightEye: welke bron staat er op de programma-uitgang? (komt in het log) */
+  programStatus: () => call('program:status'),
   /** Camera naar de programma-uitgang van de BrightEye schakelen. @param {number} camera */
   program: (camera) => call('program:switch', { camera }),
   /** Debugmodus: laatst opgeroepen preset van een camera. @param {(e:{t:number,camera:number,preset:number})=>void} fn */

@@ -20,6 +20,7 @@ main.js              Electron main-proces: config, plan, TCP, IPC, venster
 preload.js           Brug (contextBridge) → window.api
 visca.js             VISCA-commando's (Buffers)
 brighteye.js         BrightEye Generic ASCII take-opdracht
+visca-decode.js      VISCA-berichten en -commando's in gewone taal (verkeerslog)
 debug-watch.js       Debugmodus: na elke camera-completion de laatste preset opvragen
 renderer/
   index.html         Markup + dialogen (CSP)
@@ -49,6 +50,12 @@ klik op zetel ─► app.js pick(id) ─► window.api.preset(cam, preset)
 * Tijdens pan/tilt/zoom loopt een **watchdog** (`moveWatchdogMs`, 4 s): zonder nieuw commando wordt automatisch
   een 'stop' gestuurd, zodat een camera nooit blijft doordraaien.
 * Alle verkeer (TX/RX, hex) wordt als `log`-event naar de UI gestuurd (Beheer → verkeerslog, max. 200 regels).
+  Antwoorden die de IPL in stukjes doorgeeft worden eerst samengevoegd tot een compleet VISCA-bericht (eindigt op `FF`)
+  en dan met uitleg gelogd, bv. `RX cam1 90 50 02 ff — Camera is aan`. Een 4-byte antwoord (`y0 50 xx FF`) wordt gedeeld
+  door meerdere vragen; main.js onthoudt per camera de laatste vraag (power of memory) om het juist te duiden.
+* **Brighteye-log:** take en status melden wat de router terugzegt (`S:<niveau><bestemming>,<bron>`), met de cameranaam
+  die bij die bron hoort. Netwerkfouten worden vertaald (verbinding geweigerd, niet bereikbaar, time-out).
+  "Test alle camera's" doet ook een Brighteye-status als die is ingesteld, en met debug aan ook "laatste preset" per camera.
 
 ## 4. IPC-kanalen
 
@@ -67,9 +74,11 @@ Elk antwoord heeft de vorm `{ ok: true, data }` of `{ ok: false, error }`.
 | `cam:ping` | `{camera}` | power-inquiry; antwoord in het log |
 | `cam:move` | `{camera, dir, speed}` | pan/tilt starten/stoppen |
 | `cam:zoom` | `{camera, dir, speed}` | zoom starten/stoppen |
-| `program:switch` | `{camera}` | BrightEye: bron van die camera naar de programma-uitgang |
+| `program:switch` | `{camera}` | BrightEye: bron van die camera naar de programma-uitgang; log toont de bevestiging van de router |
+| `program:status` | – | BrightEye: bereikbaar? welke bron staat er op de programma-uitgang? (`@ X?0<dest>`) |
+| `cam:lastPreset` | `{camera}` | alleen met debugmodus aan: vraag de laatst opgeroepen preset op |
 | `lastPreset` (main → renderer) | `{t, camera, preset}` | debugmodus: antwoord op de vraag "laatste preset" |
-| `log` (main → renderer) | `{t, dir, camera, hex}` | verkeerslog |
+| `log` (main → renderer) | `{t, dir, camera, hex, text}` | verkeerslog; `text` = uitleg in gewone taal |
 
 ## 5. Bestandsformaten
 
@@ -159,7 +168,8 @@ Schakelaar in Beheer ("Debug: laatste preset tonen"; staat bij elke start uit, `
 ## 8. Testen
 
 ```bash
-npm test                     # visca, plan, brighteye
+npm test                     # visca, plan, brighteye, debug-watch, visca-decode
+npm run test:e2e             # main.js zonder Electron, tegen de mock (poorten 2003-2006 en 5200)
 node tools/mock-ipl.js       # nep-IPL + nep-BrightEye; zet de hosts in de app op 127.0.0.1
 ```
 

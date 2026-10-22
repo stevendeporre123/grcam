@@ -6,13 +6,17 @@
  * - Poorten 2003-2006 (127.0.0.1): print ontvangen VISCA-bytes en antwoordt met ACK (`x0 41 FF`)
  *   gevolgd door completion (`x0 51 FF`), waarbij x = antwoordadres van de camera.
  * - Beantwoordt ook `8x 09 04 3F FF` (laatste preset) met `y0 50 pp FF`.
- * - Poort 5200 (127.0.0.1): nep-BrightEye (Generic ASCII); elke opdracht eindigt op CR en krijgt '>' terug.
+ * - Poort 5200 (127.0.0.1): nep-BrightEye (Generic ASCII); elke opdracht eindigt op CR. Een take of status-vraag
+ *   (`@ X?0<dest>`) krijgt `S:<niveau><dest>,<bron>` + CRLF, en alles krijgt de prompt '>' terug.
  *
  * Gebruik: `node tools/mock-ipl.js`, en zet in de app (Beheer -> Instellingen) de IPL-host
  * en de BrightEye-host op 127.0.0.1.
  */
 const net = require('net');
 const { toHex } = require('../visca');
+
+/** Huidige bron per bestemming op de nep-Brighteye. @type {Record<number, number>} */
+const beSrc = {};
 
 // Nep-Brighteye (Generic ASCII, poort 5200): elke opdracht eindigt op CR en krijgt de prompt '>' terug.
 net.createServer((s) => {
@@ -23,6 +27,12 @@ net.createServer((s) => {
       const [cmd, ...rest] = buf.split('\r');
       buf = rest.join('\r');
       console.log(`[5200] rx ${JSON.stringify(cmd)}`);
+      const take = /^@ X:0\/([0-9a-f]+),([0-9a-f]+)$/i.exec(cmd);
+      const ask = /^@ X\?0([0-9a-f]+)$/i.exec(cmd);
+      if (take) beSrc[parseInt(take[1], 16)] = parseInt(take[2], 16);
+      const dest = take ? parseInt(take[1], 16) : ask ? parseInt(ask[1], 16) : null;
+      // Status Response `S:<niveau><bestemming>,<bron>` + CRLF, daarna de prompt (zoals de echte router)
+      if (dest !== null) s.write(`S:0${dest.toString(16)},${(beSrc[dest] ?? 0).toString(16)}\r\n`);
       s.write('>');
     }
   });
@@ -31,19 +41,28 @@ net.createServer((s) => {
 /** Laatst opgeroepen preset per poort (voor de debug-vraag). @type {Record<number, number>} */
 const lastPreset = {};
 
+/**
+ * Nep-camera's per poort. Antwoorden gaan naar ALLE verbonden clients op die poort, zoals we vermoeden dat de
+ * echte IPL doet met seriële data (ongeverifieerd): zo kan de debugmodus de commando's van een "NI-700" zien.
+ * @type {Map<number, Set<net.Socket>>}
+ */
+const clients = new Map();
+
 for (const port of [2003, 2004, 2005, 2006]) {
+  clients.set(port, new Set());
   net.createServer((s) => {
     console.log(`[${port}] verbonden`);
+    clients.get(port).add(s);
+    const reply = (buf) => clients.get(port).forEach((c) => { if (!c.destroyed && c.writable) c.write(buf); });
+    s.on('error', () => clients.get(port).delete(s));
     s.on('data', (d) => {
       console.log(`[${port}] rx ${toHex(d)}`);
       const addr = ((d[0] & 0x07) + 8) << 4; // antwoord-adres: camera 1 antwoordt met 0x90
       if (d[1] === 0x01 && d[2] === 0x04 && d[3] === 0x3f && d[4] === 0x02) lastPreset[port] = d[5]; // preset-oproep onthouden
-      if (d[1] === 0x09 && d[2] === 0x04 && d[3] === 0x3f) { // laatste preset opvragen
-        s.write(Buffer.from([addr, 0x50, lastPreset[port] ?? 0, 0xff]));
-        return;
-      }
-      s.write(Buffer.from([addr, 0x41, 0xff, addr, 0x51, 0xff]));
+      if (d[1] === 0x09 && d[2] === 0x04 && d[3] === 0x3f) return reply(Buffer.from([addr, 0x50, lastPreset[port] ?? 0, 0xff])); // laatste preset
+      if (d[1] === 0x09 && d[2] === 0x04 && d[3] === 0x00) return reply(Buffer.from([addr, 0x50, 0x02, 0xff])); // power: aan
+      reply(Buffer.from([addr, 0x41, 0xff, addr, 0x51, 0xff]));
     });
-    s.on('close', () => console.log(`[${port}] gesloten`));
+    s.on('close', () => { clients.get(port).delete(s); console.log(`[${port}] gesloten`); });
   }).listen(port, '127.0.0.1', () => console.log(`mock-IPL luistert op ${port}`));
 }

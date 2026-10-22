@@ -61,7 +61,7 @@ const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
   w.feed(3, Buffer.from([0x90, 0x51, 0xff]));
   await sleep(150);
   assert.strictEqual(written.length, 2);
-  assert.ok(logs.some((m) => m.includes('geen antwoord')));
+  assert.ok(logs.some((m) => m.includes("Geen antwoord")));
 
   // een 4-byte bericht zonder openstaande vraag (bv. power-inquiry-antwoord) wordt genegeerd
   w.feed(1, Buffer.from([0x90, 0x50, 0x02, 0xff]));

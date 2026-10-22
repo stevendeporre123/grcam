@@ -21,4 +21,30 @@ function takeCommand(dest, src) {
   return `@ X:0/${d.toString(16)},${s.toString(16)}\r`;
 }
 
-module.exports = { takeCommand };
+/**
+ * Vraagt op welke bron nu op een bestemming staat (Crosspoint Status Command `@ X?0<dest>`).
+ * Antwoord: `S:<niveau><bestemming>,<bron>` + CRLF, gevolgd door de prompt `>`.
+ * @param {number} dest bestemming (0-gebaseerd)
+ * @returns {string}
+ * @throws {Error} bij een ongeldige bestemming
+ */
+function statusCommand(dest) {
+  const d = Number(dest);
+  if (!(Number.isInteger(d) && d >= 0 && d <= 0xffff)) throw new Error('Ongeldige bestemming');
+  return `@ X?0${d.toString(16)}\r`;
+}
+
+/**
+ * Leest Status Responses (`S:04,b`) uit het antwoord van de router.
+ * @param {string} text ruwe tekst van de router
+ * @returns {{dest:number, src:number}[]} bestemming en bron (decimaal)
+ */
+function parseStatus(text) {
+  const out = [];
+  for (const m of String(text).matchAll(/S:([0-9a-f])([0-9a-f]+),([0-9a-f]+)/gi)) {
+    out.push({ dest: parseInt(m[2], 16), src: parseInt(m[3], 16) });
+  }
+  return out;
+}
+
+module.exports = { takeCommand, statusCommand, parseStatus };
