@@ -69,7 +69,9 @@ contextBridge.exposeInMainWorld('api', {
   /** Voortgang van de download (0-100). @param {(p:{percent:number})=>void} fn */
   onUpdateProgress: (fn) => ipcRenderer.on('update:progress', (_e, p) => fn(p)),
   /** Camera naar de programma-uitgang van de BrightEye schakelen. @param {number} camera */
-  program: (camera) => call('program:switch', { camera }),
+  program: (camera, target) => call('program:switch', { camera, target }),
+  /** Preset uitproberen: oproepen en optioneel naar 'pvw' of 'pgm'. */
+  presetTry: (camera, preset, target) => call('preset:try', { camera, preset, target }),
   /** Debugmodus: laatst opgeroepen preset van een camera. @param {(e:{t:number,camera:number,preset:number})=>void} fn */
   onLastPreset: (fn) => ipcRenderer.on('lastPreset', (_e, entry) => fn(entry)),
   /** Luistert naar logregels van het main-proces. @param {(e:{t:number,dir:string,camera?:number,hex:string})=>void} fn */

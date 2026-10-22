@@ -62,8 +62,17 @@
       <table id="map" class="display" style="width:100%"></table>
     </section>
     <section class="panel">
+      <h2>Preset uitproberen</h2>
+      <div class="panel-head"><span class="mute">Roep een preset op een camera op en kijk welke zitplaats dat is. Preview is veilig; PGM is live.</span>
+        <label>Camera <select id="ptCam"></select></label>
+        <label>Preset <input id="ptNum" type="number" min="0" max="254" value="1" style="width:5em"></label>
+        <button id="ptOnly">Alleen oproepen</button>
+        <button id="ptPvw">Oproepen + naar PVW</button>
+        <button id="ptPgm">Oproepen + naar PGM</button></div>
+    </section>
+    <section class="panel">
       <h2>Verkeer</h2>
-      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><label class="dbg" title="Houdt de IPL-verbindingen open en vraagt na elk camera-antwoord de laatst opgeroepen preset op"><input type="checkbox" id="debugSw"> Debug: laatste preset tonen</label><button id="btnLogWin" title="Het log in een eigen venster, bv. op een tweede scherm">Log in apart venster</button><button id="btnPing">Test alle camera's</button></div>
+      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><label class="dbg" title="Houdt de IPL-verbindingen open en stuurt na elk camera-antwoord een extra vraag naar de camera. Let op: dit verkeer ziet ook de NI-700; zet het niet aan tijdens een zitting."><input type="checkbox" id="debugSw"> Debug: laatste preset tonen</label><button id="btnLogWin" title="Het log in een eigen venster, bv. op een tweede scherm">Log in apart venster</button><button id="btnPing">Test alle camera's</button></div>
       <pre id="log"></pre>
     </section>
   </main>
@@ -106,7 +115,8 @@
         <label><input name="bEnabled" type="checkbox"> Inschakelen</label>
         <label>Host <input name="bHost" type="text"></label>
         <label>Poort (TCP-besturing, standaard 5200) <input name="bPort" type="number"></label>
-        <label>Bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
+        <label>PGM-bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
+        <label>PVW-bestemming (preview, telt vanaf 0) <input name="bPvw" type="number" min="0"></label>
       </fieldset>
       <label class="chk"><input name="uCheck" type="checkbox"> Bij het opstarten controleren op een nieuwe versie</label>
       <menu>

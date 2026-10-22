@@ -519,7 +519,8 @@
     f.bEnabled.checked = !!cfg.brighteye.enabled;
     f.bHost.value = cfg.brighteye.host || '';
     f.bPort.value = cfg.brighteye.port || 5200;
-    f.bDest.value = cfg.brighteye.dest ?? 0;
+    f.bDest.value = cfg.brighteye.dest ?? 1;
+    f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
     $id('dlgSettings').showModal();
   });
   $id('setCancel').addEventListener('click', () => $id('dlgSettings').close());
@@ -530,7 +531,7 @@
     cfg.ipl.host = clean(f.host.value);
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
-    Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value) });
+    Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
     await persist();
   });
 
@@ -640,6 +641,25 @@
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
   // Test alle camera's; de volledige test (met debug ook de laatste preset, plus Brighteye) loopt in het main-proces.
   $id('btnPing').addEventListener('click', () => run(api.testAll()));
+
+  // ---------- Preset uitproberen ----------
+  function fillPresetTry() {
+    const sel = $id('ptCam');
+    const cur = sel.value;
+    sel.innerHTML = cfg.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    if (cur) sel.value = cur;
+  }
+  async function presetTry(target) {
+    const camera = Number($id('ptCam').value);
+    const preset = Number($id('ptNum').value);
+    if (target && !cfg.brighteye?.enabled) { toast('Zet eerst de Brighteye-koppeling aan (Beheer → Instellingen)'); return; }
+    if (target === 'pgm' && !confirm(`Preset ${preset} oproepen op camera ${camera} en die camera LIVE op PGM zetten?`)) return;
+    const r = await run(api.presetTry(camera, preset, target));
+    if (r.ok) toast(`Camera ${camera}: preset ${preset} opgeroepen${target ? ` en naar ${target.toUpperCase()}` : ''}`);
+  }
+  $id('ptOnly').addEventListener('click', () => presetTry(null));
+  $id('ptPvw').addEventListener('click', () => presetTry('pvw'));
+  $id('ptPgm').addEventListener('click', () => presetTry('pgm'));
   $id('btnLogWin').addEventListener('click', () => run(api.openLogWindow()));
 
   // De debugstand kan ook in het logvenster gewijzigd worden.
@@ -661,7 +681,7 @@
     renderPlan();
     renderZaal();
     renderCamSel();
-    renderProgram();
+    renderProgram(); fillPresetTry();
     markActive();
     $id('debugSw').checked = Boolean(cfg.debug);
     if (!cfg.debug) banner.hidden = true;

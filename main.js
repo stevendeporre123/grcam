@@ -418,12 +418,13 @@ const camOfSource = (src) => {
  * @param {number} camera
  * @returns {Promise<void>}
  */
-async function brighteyeTake(camera) {
+async function brighteyeTake(camera, target = 'pgm') {
   const cam = camById(camera);
-  const cmd = takeCommand(config.brighteye.dest, cam.beSource);
+  const dest = target === 'pvw' ? Number(config.brighteye.pvwDest ?? 0) : Number(config.brighteye.dest ?? 1);
+  const cmd = takeCommand(dest, cam.beSource);
   const reply = await brighteyeExchange(cmd, camera);
   const st = parseStatus(reply)[0];
-  log({ dir: 'tx', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: `Brighteye: ${cam.name} naar de programma-uitgang schakelen` });
+  log({ dir: 'tx', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: `Brighteye: ${cam.name} naar ${target === 'pvw' ? 'PVW (preview)' : 'PGM (programma)'} schakelen (bestemming ${dest})` });
   log({
     dir: 'rx', camera, hex: `brighteye: ${JSON.stringify(reply)}`,
     text: st ? `Brighteye bevestigt: bestemming ${st.dest} staat nu op bron ${st.src}${camOfSource(st.src)}`
@@ -437,12 +438,12 @@ async function brighteyeTake(camera) {
  */
 async function brighteyeStatus() {
   // Alle bestemmingen 0-7 opvragen: zo zie je welke uitgang PGM is en welke preview. De ingestelde bestemming staat erbij.
-  const mine = Number(config.brighteye.dest) || 0;
+  const mine = Number(config.brighteye.dest ?? 1);
   for (let d = 0; d <= 7; d++) {
     const cmd = statusCommand(d);
     const reply = await brighteyeExchange(cmd);
     const st = parseStatus(reply)[0];
-    const tag = d === mine ? ' ← hier schakelt de app naartoe (Instellingen → Bestemming)' : '';
+    const tag = d === Number(config.brighteye.pvwDest ?? 0) ? ' ← PVW-bestemming van de app' : d === mine ? ' ← PGM-bestemming van de app' : '';
     log({ dir: 'tx', hex: `brighteye: ${JSON.stringify(cmd)}`, text: `Brighteye: welke bron staat er op bestemming ${d}?` });
     log({
       dir: 'rx', hex: `brighteye: ${JSON.stringify(reply)}`,
@@ -488,7 +489,16 @@ const handlers = {
     await sendVisca(camera, visca.zoom(a, dir, speed));
   },
 
-  'program:switch': (_e, { camera }) => brighteyeTake(camera),
+  'program:switch': (_e, { camera, target }) => brighteyeTake(camera, target === 'pvw' ? 'pvw' : 'pgm'),
+  // Preset uitproberen: preset oproepen op een camera en (optioneel) die camera naar PVW of PGM schakelen.
+  'preset:try': async (_e, { camera, preset, target }) => {
+    const n = Number(preset);
+    if (!Number.isInteger(n) || n < 0 || n > 254) throw new Error('Presetnummer moet een geheel getal van 0 tot 254 zijn');
+    const cam = camById(camera);
+    watcher.noteOwnMove(cam.id);
+    await sendVisca(cam.id, visca.presetRecall(cam.viscaAddr, n));
+    if (target === 'pvw' || target === 'pgm') await brighteyeTake(cam.id, target);
+  },
   'program:status': () => brighteyeStatus(),
 
   'log:history': () => logBuffer,

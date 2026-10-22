@@ -82,3 +82,7 @@ Volledige technische documentatie (dataflow, IPC, bestandsformaten, protocollen,
 | `renderer/app.js`, `index.html`, `style.css` | UI |
 | `plan.default.json` | zetels en fracties uit de zittingsplan-pagina |
 | `config.default.json` | standaardinstellingen |
+
+## Preset uitproberen
+
+Beheer → *Preset uitproberen*: kies een camera en een presetnummer en roep die op, optioneel meteen naar PVW (preview, bestemming 0) of PGM (programma, bestemming 1) op de BrightEye. De bestemmingen zijn instelbaar. Zo zie je of een preset bestaat en welke zitplaats erbij hoort, zonder debugmodus. Debug stuurt extra vragen naar de camera's die ook de NI-700 ziet; gebruik het niet tijdens een zitting.

@@ -106,7 +106,7 @@ const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
 
   const cfg = (await call('cfg:get')).data;
   cfg.ipl.host = '127.0.0.1';
-  cfg.brighteye = { enabled: true, host: '127.0.0.1', port: 5200, dest: 0 };
+  cfg.brighteye = { enabled: true, host: '127.0.0.1', port: 5200, dest: 0, pvwDest: 1 };
   cfg.debug = true;
   assert.ok((await call('cfg:save', cfg)).ok);
   await sleep(300);
@@ -140,6 +140,13 @@ const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
   events.length = 0;
   assert.ok((await call('program:status')).ok);
   assert.ok(logs().some((l) => /Brighteye: bestemming 0 staat op bron 1 \(Camera 2\)/.test(l.text)));
+
+  // 3b. Preset uitproberen: oproepen + naar PVW (bestemming 1 in deze testconfig)
+  events.length = 0;
+  assert.ok((await call('preset:try', { camera: 3, preset: 7, target: 'pvw' })).ok);
+  assert.ok(logs().some((l) => /Camera 3 naar PVW \(preview\) schakelen \(bestemming 1\)/.test(l.text)), JSON.stringify(logs()));
+  assert.strictEqual((await call('preset:try', { camera: 3, preset: 999 })).ok, false);
+  assert.ok((await call('preset:try', { camera: 3, preset: 7 })).ok);
 
   // 4. Brighteye onbereikbaar: leesbare fout
   const bad = (await call('cfg:get')).data;
