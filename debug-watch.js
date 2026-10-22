@@ -44,11 +44,12 @@ const isCompletion = (m) => m.length === 3 && (m[0] & 0x0f) === 0x00 && m[0] >= 
  * @param {(camId:number, buf:Buffer)=>void} o.write  stuurt bytes naar de camera (en logt TX)
  * @param {(camId:number, preset:number)=>void} o.onLast  antwoord ontvangen
  * @param {(msg:string, camId:number)=>void} [o.log]
+ * @param {(camId:number)=>void} [o.onTimeout]  de camera antwoordde niet binnen `replyTimeoutMs`
  * @param {number} [o.delayMs=200]  wachttijd na de completion voor we vragen
  * @param {number} [o.replyTimeoutMs=1500]  hoelang we op het antwoord wachten
  * @param {number} [o.suppressMs=1500]  negeer completions kort na onze eigen pan/tilt/zoom
  */
-function createWatcher({ getCamera, write, onLast, log = () => {}, delayMs = 200, replyTimeoutMs = 1500, suppressMs = 1500 }) {
+function createWatcher({ getCamera, write, onLast, log = () => {}, onTimeout = () => {}, delayMs = 200, replyTimeoutMs = 1500, suppressMs = 1500 }) {
   let enabled = false;
   /** @type {Map<number, {carry:Buffer, scheduled:boolean, pending:boolean, timer:any, lastOwn:number}>} */
   const st = new Map();
@@ -63,7 +64,8 @@ function createWatcher({ getCamera, write, onLast, log = () => {}, delayMs = 200
     s.scheduled = false;
     s.pending = true;
     write(camId, visca.memoryInquiry(getCamera(camId).viscaAddr));
-    s.timer = setTimeout(() => { s.pending = false; log("Geen antwoord op de vraag naar de laatste preset (de camera ondersteunt dit mogelijk niet)", camId); }, replyTimeoutMs);
+    s.timer = setTimeout(() => { s.pending = false; log("Geen antwoord op de vraag naar de laatste preset (de camera ondersteunt dit mogelijk niet, of de verbinding is weggevallen)", camId);
+      onTimeout(camId); }, replyTimeoutMs);
   }
 
   return {

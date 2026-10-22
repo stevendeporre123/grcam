@@ -519,10 +519,12 @@
   $id('setCancel').addEventListener('click', () => $id('dlgSettings').close());
   $id('formSettings').addEventListener('submit', async (e) => {
     const f = e.target;
-    cfg.ipl.host = f.host.value.trim();
+    // "http://10.0.0.1/" of "10.0.0.1:5200" -> "10.0.0.1"
+    const clean = (v) => v.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '');
+    cfg.ipl.host = clean(f.host.value);
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
-    Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: f.bHost.value.trim(), port: Number(f.bPort.value), dest: Number(f.bDest.value) });
+    Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value) });
     await persist();
   });
 

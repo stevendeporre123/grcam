@@ -22,6 +22,7 @@ const { createWatcher, splitMessages } = require('./debug-watch');
 const { describe, describeCommand, queryKind } = require('./visca-decode');
 const { takeCommand, statusCommand, parseStatus } = require('./brighteye');
 const store = require('./data-store');
+const { cleanHost } = require('./host');
 const updater = require('./updater');
 
 /** GitHub-repository waaruit updates komen (publieke releases). */
@@ -75,10 +76,14 @@ const watcher = createWatcher({
     logTx(id, buf, '(debug)');
   },
   onLast: (id, preset) => {
-    log({ dir: 'info', camera: id, hex: '', text: `Laatst opgeroepen preset: ${preset}` });
     if (win && !win.isDestroyed()) win.webContents.send('lastPreset', { t: Date.now(), camera: id, preset });
   },
   log: (msg, id) => log({ dir: 'info', camera: id, hex: '', text: msg }),
+  // Geen antwoord: de verbinding kan stilletjes zijn weggevallen. Sluiten; in debugmodus wordt ze meteen hersteld.
+  onTimeout: (id) => {
+    const entry = conns.get(`${config.ipl.host}:${camById(id).port}`);
+    if (entry) { entry.sock.destroy(); log({ dir: 'info', camera: id, hex: '', text: 'Verbinding met de IPL wordt hersteld' }); }
+  },
 });
 
 /** Laatste vraag (power/memory) per camera, om een 4-byte antwoord te kunnen duiden. @type {Map<number, 'power'|'memory'>} */
@@ -127,6 +132,8 @@ function normalizeConfig(raw) {
   const c = { ...defaults, ...(raw || {}) };
   c.ipl = { ...defaults.ipl, ...c.ipl };
   c.brighteye = { ...defaults.brighteye, ...c.brighteye };
+  c.ipl.host = cleanHost(c.ipl.host);
+  c.brighteye.host = cleanHost(c.brighteye.host);
   c.debug = false; // debugmodus staat bij elke start uit (houdt anders IPL-verbindingen open)
   // Ontbrekende cameravelden (bv. positie op het plan) aanvullen vanuit de standaard.
   // Ontbrekende camera's (id 1-4) worden bijgemaakt.
@@ -141,6 +148,8 @@ function normalizeConfig(raw) {
  */
 function saveConfig(next) {
   config = next;
+  if (config.ipl) config.ipl.host = cleanHost(config.ipl.host); // "http://10.0.0.1/" -> "10.0.0.1"
+  if (config.brighteye) config.brighteye.host = cleanHost(config.brighteye.host);
   store.writeWithBackup(cfgPath(), JSON.stringify(config, null, 2));
 }
 
@@ -226,6 +235,7 @@ function getSocket(host, port, camId) {
     const sock = net.createConnection({ host, port });
     const entry = { sock, timer: null };
     sock.setNoDelay(true);
+    sock.setKeepAlive(true, 5000); // een wegvallende verbinding sneller opmerken
     sock.setTimeout(3000, () => sock.destroy(new Error(`Time-out bij verbinden met ${key}`)));
     sock.once('connect', () => {
       sock.setTimeout(0);

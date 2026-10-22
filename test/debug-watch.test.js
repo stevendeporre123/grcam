@@ -28,11 +28,13 @@ const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
   const written = [];
   const got = [];
   const logs = [];
+  const timeouts = [];
   const w = createWatcher({
     getCamera: () => ({ viscaAddr: 1 }),
     write: (id, buf) => written.push([id, visca.toHex(buf)]),
     onLast: (id, p) => got.push([id, p]),
     log: (m) => logs.push(m),
+    onTimeout: (id) => timeouts.push(id),
     delayMs: 20, replyTimeoutMs: 80, suppressMs: 100,
   });
 
@@ -62,6 +64,7 @@ const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
   await sleep(150);
   assert.strictEqual(written.length, 2);
   assert.ok(logs.some((m) => m.includes("Geen antwoord")));
+  assert.deepStrictEqual(timeouts, [3], "time-out meldt de camera zodat de verbinding hersteld wordt");
 
   // een 4-byte bericht zonder openstaande vraag (bv. power-inquiry-antwoord) wordt genegeerd
   w.feed(1, Buffer.from([0x90, 0x50, 0x02, 0xff]));
