@@ -504,6 +504,8 @@
   $id('btnSettings').addEventListener('click', () => {
     const f = $id('formSettings');
     f.host.value = cfg.ipl.host;
+    f.uCheck.checked = cfg.updateCheck !== false;
+    api.appInfo().then((r) => { if (r.ok) $id('appInfo').textContent = `Versie ${r.data.version} · gegevens in ${r.data.dataDir}`; });
     $id('camFields').innerHTML = '<legend>Welke camera is welk nummer? Pas de poort aan en klik Test.</legend>' +
       '<div class="camrow camhead"><span>Naam</span><span>IPL-poort</span><span>VISCA</span><span>Brighteye</span><span></span></div>' +
       cfg.cameras.map((c) => `<div class="camrow"><input data-n="${c.id}" value="${esc(c.name)}"><input data-p="${c.id}" type="number" value="${c.port}"><input data-a="${c.id}" type="number" min="1" max="7" value="${c.viscaAddr}"><input data-b="${c.id}" type="number" min="0" value="${c.beSource ?? 0}"><button type="button" data-test="${c.id}">Test</button></div>`).join('');
@@ -519,8 +521,84 @@
     const f = e.target;
     cfg.ipl.host = f.host.value.trim();
     readCamFields(f);
+    cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: f.bHost.value.trim(), port: Number(f.bPort.value), dest: Number(f.bDest.value) });
     await persist();
+  });
+
+  // ---------- Updates ----------
+
+  /** Laatst gevonden release. */
+  let upd = null;
+  const btnUpd = $id('btnUpdate');
+
+  /** Toont de oranje "Update beschikbaar"-knop. @param {object} u */
+  function showUpdate(u) {
+    upd = u;
+    btnUpd.hidden = !u.newer;
+    btnUpd.textContent = `Update ${u.latest} beschikbaar`;
+  }
+
+  /** Opent het updatevenster met versie en release-notes. */
+  function openUpdate() {
+    $id('updTitle').textContent = `Versie ${upd.latest} beschikbaar`;
+    $id('updInfo').textContent = `Je gebruikt versie ${upd.current}.${upd.asset ? '' : ' Deze release bevat geen .exe.'}`;
+    $id('updNotes').textContent = upd.notes || '(geen release-notes)';
+    $id('updBar').hidden = true;
+    $id('updGo').disabled = !upd.asset;
+    $id('dlgUpdate').showModal();
+  }
+
+  /** Controleert handmatig op een nieuwe versie. */
+  async function checkUpdates() {
+    const r = await run(api.checkUpdate());
+    if (!r.ok) return;
+    showUpdate(r.data);
+    if (r.data.newer) openUpdate(); else toast(`Je hebt de laatste versie (${r.data.current})`);
+  }
+
+  btnUpd.addEventListener('click', () => upd && openUpdate());
+  $id('btnUpdateCheck').addEventListener('click', checkUpdates);
+  $id('updLater').addEventListener('click', () => $id('dlgUpdate').close());
+  api.onUpdateAvailable(showUpdate);
+  api.onUpdateProgress((p) => { $id('updBar').value = p.percent; });
+  $id('updGo').addEventListener('click', async () => {
+    $id('updGo').disabled = true;
+    $id('updBar').hidden = false;
+    $id('updBar').value = 0;
+    const r = await run(api.installUpdate());
+    if (!r.ok) { $id('updGo').disabled = false; return; }
+    await run(api.launchUpdate()); // de app sluit en de nieuwe versie start
+  });
+
+  // ---------- Back-up ----------
+
+  // Back-up maken: één JSON-bestand met instellingen, koppelingen en zittingsplan
+  $id('btnBackup').addEventListener('click', async () => {
+    const r = await run(api.exportBackup());
+    if (!r.ok) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' }));
+    a.download = `ptz-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+
+  // Back-up terugzetten
+  $id('btnRestore').addEventListener('click', () => $id('backupFile').click());
+  $id('backupFile').addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!confirm('Alle huidige instellingen, koppelingen en het zittingsplan worden vervangen door de back-up. Doorgaan?')) return;
+    try {
+      const r = await run(api.restoreBackup(JSON.parse(await file.text())));
+      if (!r.ok) return;
+      cfg = r.data.config;
+      plan = r.data.plan;
+      renderAll();
+      toast('Back-up teruggezet');
+    } catch { toast('Dat bestand is geen geldig JSON-bestand'); }
   });
 
   // Zittingsplan importeren uit een backup-bestand van de zittingsplan-pagina

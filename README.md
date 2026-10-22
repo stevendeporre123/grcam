@@ -25,6 +25,17 @@ Tests: `npm test`. Windows-exe: `npm run dist`, of via GitHub Actions: push een 
 3. Klik de zetel en kies **Opslaan in camera** (positie wordt in de camera bewaard onder dat presetnummer en gekoppeld), of **Enkel koppelen** voor een preset die al in de camera staat. Nieuwe koppelingen krijgen als voorstel presetnummer 20 of hoger, zodat bestaande presets niet overschreven worden.
 4. Voor de zaalknoppen werkt het hetzelfde; daar kan je ook de naam van de knop aanpassen.
 
+## Gegevens, back-up en updates
+
+* **Waar staan mijn gegevens?** In `%APPDATA%\GRCam-PTZ` (config.json en plan.json), los van de programmaversie: een nieuwe
+  .exe vindt dezelfde gegevens. Gegevens uit mappen van eerdere versies worden bij de eerste start overgenomen. Bij elke
+  wijziging komt de vorige versie in `backups\` (de laatste 20 blijven bewaard).
+* **Back-up maken / terugzetten** (Beheer): één JSON-bestand met alle instellingen, koppelingen en het zittingsplan.
+* **Updates:** Beheer → *Controleer op updates*, of bij het opstarten (uitschakelbaar in Instellingen) verschijnt
+  *Update x.y.z beschikbaar*. De app downloadt de laatste release van GitHub naast de huidige .exe, controleert grootte en
+  sha256, en start de nieuwe versie na een klik. Nooit automatisch tijdens een zitting.
+* **Waarschuwing van Defender/SmartScreen?** Zie [docs/SIGNING.md](docs/SIGNING.md).
+
 ## Zetels aanpassen
 
 Beheer → **Bewerken** bij een zetel → *Zetel bewerken*: naam, fractie (of geen fractie) en micropostnummer. Cameranummers: Beheer → Instellingen → **Test** per camera; cameramarkeringen sleep je op het plan in Inleren-modus.

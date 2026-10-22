@@ -73,3 +73,8 @@ body.learning .cam { cursor:grab; }
 #seatEdit summary { cursor:pointer; color:var(--mute); }
 #seatEdit label { margin-top:8px; }
 #seatEdit .chk { flex-direction:row; align-items:center; gap:8px; }
+
+.upd { background:#3b2f10; border-color:#a07a1a; color:#ffd77a; margin-right:10px; }
+#dlgUpdate .notes { max-height:200px; overflow:auto; white-space:pre-wrap; background:#0f1217; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; }
+#dlgUpdate progress { width:100%; }
+#dlgSettings .chk { flex-direction:row; align-items:center; gap:8px; }

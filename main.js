@@ -14,12 +14,22 @@
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('fs');
+const { spawn } = require('child_process');
 const net = require('net');
 const path = require('path');
 const visca = require('./visca');
 const { createWatcher, splitMessages } = require('./debug-watch');
 const { describe, describeCommand, queryKind } = require('./visca-decode');
 const { takeCommand, statusCommand, parseStatus } = require('./brighteye');
+const store = require('./data-store');
+const updater = require('./updater');
+
+/** GitHub-repository waaruit updates komen (publieke releases). */
+const REPO = 'stevendeporre123/grcam';
+
+// Vaste datamap (los van pakketnaam/versie), zodat een nieuwe .exe altijd dezelfde gegevens vindt.
+// Moet vóór het eerste gebruik van 'userData' gebeuren.
+app.setPath('userData', store.dataDir(app.getPath('appData')));
 
 /**
  * @typedef {Object} Camera
@@ -100,19 +110,29 @@ const planPath = () => path.join(app.getPath('userData'), 'plan.json');
  * @returns {Config}
  */
 function loadConfig() {
-  const defaults = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.default.json'), 'utf8'));
-  try {
-    config = { ...defaults, ...JSON.parse(fs.readFileSync(cfgPath(), 'utf8')) };
-  } catch {
-    config = defaults;
-  }
-  config.ipl = { ...defaults.ipl, ...config.ipl };
-  config.brighteye = { ...defaults.brighteye, ...config.brighteye };
-  config.debug = false; // debugmodus staat bij elke start uit (houdt anders IPL-verbindingen open)
-  // Ontbrekende cameravelden (bv. positie op het plan) aanvullen vanuit de standaard.
-  config.cameras = config.cameras.map((c) => ({ ...defaults.cameras.find((d) => d.id === c.id), ...c }));
+  let raw = null;
+  try { raw = JSON.parse(fs.readFileSync(cfgPath(), 'utf8')); } catch { /* eerste start of onleesbaar: standaard */ }
+  config = normalizeConfig(raw);
   saveConfig(config);
   return config;
+}
+
+/**
+ * Vult een (oudere of ontbrekende) config aan met de standaardwaarden.
+ * @param {object|null} raw
+ * @returns {Config}
+ */
+function normalizeConfig(raw) {
+  const defaults = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.default.json'), 'utf8'));
+  const c = { ...defaults, ...(raw || {}) };
+  c.ipl = { ...defaults.ipl, ...c.ipl };
+  c.brighteye = { ...defaults.brighteye, ...c.brighteye };
+  c.debug = false; // debugmodus staat bij elke start uit (houdt anders IPL-verbindingen open)
+  // Ontbrekende cameravelden (bv. positie op het plan) aanvullen vanuit de standaard.
+  // Ontbrekende camera's (id 1-4) worden bijgemaakt.
+  const have = new Map((raw?.cameras || []).map((cam) => [cam.id, cam]));
+  c.cameras = defaults.cameras.map((d) => ({ ...d, ...have.get(d.id) }));
+  return c;
 }
 
 /**
@@ -121,8 +141,7 @@ function loadConfig() {
  */
 function saveConfig(next) {
   config = next;
-  fs.mkdirSync(path.dirname(cfgPath()), { recursive: true });
-  fs.writeFileSync(cfgPath(), JSON.stringify(config, null, 2));
+  store.writeWithBackup(cfgPath(), JSON.stringify(config, null, 2));
 }
 
 /**
@@ -135,8 +154,7 @@ function loadPlan() {
     return JSON.parse(fs.readFileSync(planPath(), 'utf8'));
   } catch {
     const plan = JSON.parse(fs.readFileSync(path.join(__dirname, 'plan.default.json'), 'utf8'));
-    fs.mkdirSync(path.dirname(planPath()), { recursive: true });
-    fs.writeFileSync(planPath(), JSON.stringify(plan));
+    store.writeWithBackup(planPath(), JSON.stringify(plan));
     return plan;
   }
 }
@@ -155,7 +173,7 @@ function importPlan(p) {
   const mics = Object.fromEntries(old.seats.filter((s) => s.mic).map((s) => [s.id, s.mic]));
   const seats = p.seats.map((s) => (mics[s.id] && !s.mic ? { ...s, mic: mics[s.id] } : s));
   const plan = { ...old, fracties: p.fracties, seats };
-  fs.writeFileSync(planPath(), JSON.stringify(plan));
+  store.writeWithBackup(planPath(), JSON.stringify(plan));
   return plan;
 }
 
@@ -167,7 +185,7 @@ function importPlan(p) {
  */
 function savePlan(p) {
   if (!p || !Array.isArray(p.fracties) || !Array.isArray(p.seats)) throw new Error('Ongeldig zittingsplan');
-  fs.writeFileSync(planPath(), JSON.stringify(p));
+  store.writeWithBackup(planPath(), JSON.stringify(p));
   return p;
 }
 
@@ -374,6 +392,11 @@ async function brighteyeStatus() {
   });
 }
 
+/** Laatst opgehaalde release-info en pad van een gedownloade update. */
+let lastUpdate = null;
+/** @type {string|null} */
+let downloadedUpdate = null;
+
 /**
  * IPC-handlers, per kanaalnaam. Argumenten komen van de UI via preload.js.
  * @type {Record<string, (event: object, arg: any) => any>}
@@ -408,6 +431,45 @@ const handlers = {
   'program:switch': (_e, { camera }) => brighteyeTake(camera),
   'program:status': () => brighteyeStatus(),
 
+  'app:info': () => ({ version: app.getVersion(), dataDir: app.getPath('userData') }),
+
+  // Back-up van alle instellingen en koppelingen (config + zittingsplan) als één JSON-bestand.
+  'backup:export': () => ({ app: 'grcam', version: app.getVersion(), exportedAt: new Date().toISOString(), config, plan: loadPlan() }),
+  'backup:import': (_e, b) => {
+    if (!b || b.app !== 'grcam' || !b.config || !Array.isArray(b.config.cameras) || !b.plan || !Array.isArray(b.plan.seats) || !Array.isArray(b.plan.fracties)) {
+      throw new Error('Dit is geen geldige back-up van deze app');
+    }
+    const was = Boolean(config.debug);
+    saveConfig(normalizeConfig(b.config));
+    store.writeWithBackup(planPath(), JSON.stringify(b.plan));
+    applyDebug(was);
+    return { config, plan: b.plan };
+  },
+
+  'update:check': async () => {
+    lastUpdate = await updater.checkLatest({ repo: REPO, current: app.getVersion(), apiBase: process.env.GRCAM_UPDATE_API || updater.API_BASE });
+    return lastUpdate;
+  },
+  'update:install': async () => {
+    if (!lastUpdate?.newer || !lastUpdate.asset) throw new Error('Er is geen nieuwe versie om te installeren');
+    const dir = process.env.PORTABLE_EXECUTABLE_DIR || app.getPath('downloads');
+    const dest = path.join(dir, `PTZ-Backup-${lastUpdate.latest}-portable.exe`);
+    const a = lastUpdate.asset;
+    await updater.download(a.url, dest, {
+      size: a.size, sha256: a.sha256,
+      onProgress: (percent) => { if (win && !win.isDestroyed()) win.webContents.send('update:progress', { percent }); },
+    });
+    downloadedUpdate = dest;
+    log({ dir: 'info', hex: '', text: `Update ${lastUpdate.latest} gedownload en gecontroleerd: ${dest}` });
+    return { path: dest };
+  },
+  // Start de gedownloade versie en sluit deze. Enkel het pad dat we zelf hebben gedownload wordt gestart.
+  'update:launch': () => {
+    if (!downloadedUpdate || !fs.existsSync(downloadedUpdate)) throw new Error('Er is nog geen update gedownload');
+    spawn(downloadedUpdate, [], { detached: true, stdio: 'ignore' }).unref();
+    setTimeout(() => app.quit(), 300);
+  },
+
   'cam:lastPreset': (_e, { camera }) => {
     if (!config.debug) throw new Error('Zet eerst de debugschakelaar aan');
     camById(camera);
@@ -426,7 +488,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const moved = store.migrateLegacy(app.getPath('appData'), app.getPath('userData'));
   loadConfig();
+  if (moved) log({ dir: 'info', hex: '', text: `Instellingen overgenomen uit ${moved.from}` });
   // Elke handler wordt verpakt zodat fouten als {ok:false, error} bij de UI aankomen en in het log verschijnen.
   for (const [ch, fn] of Object.entries(handlers)) {
     ipcMain.handle(ch, async (e, arg) => {
@@ -435,6 +499,14 @@ app.whenReady().then(() => {
     });
   }
   createWindow();
+  // Stille controle op een nieuwe versie (uitschakelbaar in de instellingen). Installeert nooit vanzelf.
+  setTimeout(async () => {
+    if (config.updateCheck === false) return;
+    try {
+      lastUpdate = await updater.checkLatest({ repo: REPO, current: app.getVersion(), apiBase: process.env.GRCAM_UPDATE_API || updater.API_BASE });
+      if (lastUpdate.newer && win && !win.isDestroyed()) win.webContents.send('update:available', lastUpdate);
+    } catch { /* geen internet in de zaal: stil negeren */ }
+  }, 5000);
 });
 
 app.on('window-all-closed', () => app.quit());

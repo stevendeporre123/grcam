@@ -17,6 +17,7 @@
     "dest": 0
   },
   "debug": false,
+  "updateCheck": true,
   "view": "ambtenaren",
   "zaal": [
     { "id": "zaal1", "label": "Zaal 1" },

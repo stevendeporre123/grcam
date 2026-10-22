@@ -21,6 +21,8 @@ preload.js           Brug (contextBridge) → window.api
 visca.js             VISCA-commando's (Buffers)
 brighteye.js         BrightEye Generic ASCII take-opdracht
 visca-decode.js      VISCA-berichten en -commando's in gewone taal (verkeerslog)
+data-store.js        Vaste datamap, migratie en back-ups
+updater.js           Update-controle en download via GitHub Releases
 debug-watch.js       Debugmodus: na elke camera-completion de laatste preset opvragen
 renderer/
   index.html         Markup + dialogen (CSP)
@@ -57,6 +59,17 @@ klik op zetel ─► app.js pick(id) ─► window.api.preset(cam, preset)
   die bij die bron hoort. Netwerkfouten worden vertaald (verbinding geweigerd, niet bereikbaar, time-out).
   "Test alle camera's" doet ook een Brighteye-status als die is ingesteld, en met debug aan ook "laatste preset" per camera.
 
+## 3b. Gegevens, back-up en updates
+
+* `data-store.js`: vaste datamap `%APPDATA%\GRCam-PTZ` (`app.setPath('userData', …)` vóór het eerste gebruik), eenmalige
+  migratie vanuit `ptz-backup`, `grcam`, `PTZ Backup`, `PTZ-Backup`, en `writeWithBackup` (vorige versie naar `backups/`,
+  laatste 20 bewaard).
+* `updater.js`: `checkLatest` (GitHub Releases `/releases/latest`, vergelijkt de tag met `app.getVersion()`), `download`
+  (volgt redirects, controleert grootte en sha256 uit de release-gegevens). Het updatepad (`PORTABLE_EXECUTABLE_DIR` of
+  Downloads) is enkel dat van de portable .exe; `update:launch` start uitsluitend het zelf gedownloade bestand.
+* De versie van de .exe komt uit `package.json`; de GitHub Action zet die uit de tag (zie workflow).
+* Ondertekening: zie [SIGNING.md](SIGNING.md).
+
 ## 4. IPC-kanalen
 
 Elk antwoord heeft de vorm `{ ok: true, data }` of `{ ok: false, error }`.
@@ -76,6 +89,12 @@ Elk antwoord heeft de vorm `{ ok: true, data }` of `{ ok: false, error }`.
 | `cam:zoom` | `{camera, dir, speed}` | zoom starten/stoppen |
 | `program:switch` | `{camera}` | BrightEye: bron van die camera naar de programma-uitgang; log toont de bevestiging van de router |
 | `program:status` | – | BrightEye: bereikbaar? welke bron staat er op de programma-uitgang? (`@ X?0<dest>`) |
+| `app:info` | – | versie en datamap |
+| `backup:export` / `backup:import` | – / back-up | alle instellingen + plan als JSON; terugzetten valideert eerst |
+| `update:check` | – | laatste release ophalen (`GRCAM_UPDATE_API` overschrijft de GitHub-URL, voor tests) |
+| `update:install` | – | download van de nieuwe .exe met controle |
+| `update:launch` | – | start de gedownloade .exe en sluit de app |
+| `update:available` / `update:progress` (main → renderer) | release / `{percent}` | stille melding bij opstarten; voortgang |
 | `cam:lastPreset` | `{camera}` | alleen met debugmodus aan: vraag de laatst opgeroepen preset op |
 | `lastPreset` (main → renderer) | `{t, camera, preset}` | debugmodus: antwoord op de vraag "laatste preset" |
 | `log` (main → renderer) | `{t, dir, camera, hex, text}` | verkeerslog; `text` = uitleg in gewone taal |

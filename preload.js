@@ -42,6 +42,22 @@ contextBridge.exposeInMainWorld('api', {
   lastPreset: (camera) => call('cam:lastPreset', { camera }),
   /** BrightEye: welke bron staat er op de programma-uitgang? (komt in het log) */
   programStatus: () => call('program:status'),
+  /** Versie van de app en de map waar de gegevens staan. */
+  appInfo: () => call('app:info'),
+  /** Back-up (config + plan) opvragen. */
+  exportBackup: () => call('backup:export'),
+  /** Back-up terugzetten. @param {object} b */
+  restoreBackup: (b) => call('backup:import', b),
+  /** Controleer op een nieuwe versie (GitHub Releases). */
+  checkUpdate: () => call('update:check'),
+  /** Download de nieuwe versie (controle op grootte en sha256). */
+  installUpdate: () => call('update:install'),
+  /** Start de gedownloade versie en sluit deze app. */
+  launchUpdate: () => call('update:launch'),
+  /** Stille update-melding bij het opstarten. @param {(u:object)=>void} fn */
+  onUpdateAvailable: (fn) => ipcRenderer.on('update:available', (_e, u) => fn(u)),
+  /** Voortgang van de download (0-100). @param {(p:{percent:number})=>void} fn */
+  onUpdateProgress: (fn) => ipcRenderer.on('update:progress', (_e, p) => fn(p)),
   /** Camera naar de programma-uitgang van de BrightEye schakelen. @param {number} camera */
   program: (camera) => call('program:switch', { camera }),
   /** Debugmodus: laatst opgeroepen preset van een camera. @param {(e:{t:number,camera:number,preset:number})=>void} fn */

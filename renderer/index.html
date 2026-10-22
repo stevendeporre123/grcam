@@ -15,6 +15,7 @@
       <button data-tab="admin">Beheer</button>
     </nav>
     <div id="program" class="program" hidden></div>
+    <button id="btnUpdate" class="upd" hidden></button>
     <div class="spacer"></div>
     <div class="tabs" id="viewSel" title="Richting van het plan">
       <button data-view="ambtenaren">Zicht ambtenarenbank</button>
@@ -50,7 +51,11 @@
         <h2>Zetels en zaalknoppen <span id="assignCount" class="mute"></span></h2>
         <div>
           <button id="btnImportPlan">Zittingsplan importeren…</button>
+          <button id="btnUpdateCheck">Controleer op updates</button>
+          <button id="btnBackup" title="Alle instellingen, koppelingen en het zittingsplan opslaan in een bestand">Back-up maken</button>
+          <button id="btnRestore">Back-up terugzetten…</button>
           <button id="btnSettings">Instellingen</button>
+          <input type="file" id="backupFile" accept="application/json,.json" hidden>
           <input type="file" id="planFile" accept="application/json,.json" hidden>
         </div>
       </div>
@@ -93,6 +98,7 @@
   <dialog id="dlgSettings">
     <form method="dialog" id="formSettings">
       <h3>Instellingen</h3>
+      <p id="appInfo" class="hint"></p>
       <label>IPL T S6 host <input name="host" type="text" required></label>
       <fieldset id="camFields"><legend>Camera's</legend></fieldset>
       <fieldset>
@@ -102,9 +108,24 @@
         <label>Poort (TCP-besturing, standaard 5200) <input name="bPort" type="number"></label>
         <label>Bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
       </fieldset>
+      <label class="chk"><input name="uCheck" type="checkbox"> Bij het opstarten controleren op een nieuwe versie</label>
       <menu>
         <button type="button" id="setCancel">Annuleren</button>
         <button type="submit" class="primary">Opslaan</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="dlgUpdate">
+    <form method="dialog" id="formUpdate">
+      <h3 id="updTitle">Update beschikbaar</h3>
+      <p id="updInfo" class="mute"></p>
+      <pre id="updNotes" class="notes"></pre>
+      <p class="hint">Niet tijdens een zitting installeren: de app sluit en start opnieuw. Instellingen en koppelingen blijven behouden.</p>
+      <progress id="updBar" max="100" value="0" hidden></progress>
+      <menu>
+        <button type="button" id="updLater">Later</button>
+        <button type="button" id="updGo" class="primary">Downloaden en herstarten</button>
       </menu>
     </form>
   </dialog>
