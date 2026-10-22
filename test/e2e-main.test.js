@@ -23,11 +23,20 @@ fs.writeFileSync(path.join(appData, 'grcam', 'config.json'), JSON.stringify({ vi
 let userData = path.join(tmp, 'default-userdata');
 const handlers = {};
 const events = [];
+const logEvents = [];
 let quitCalled = false;
+let windowsCreated = 0;
 class FakeWindow {
-  constructor() { this.webContents = { send: (c, d) => events.push([c, d]) }; }
+  constructor() {
+    windowsCreated += 1;
+    const sink = windowsCreated === 1 ? events : logEvents; // hoofdvenster en logvenster krijgen elk hun eigen lijst
+    this.webContents = { send: (c, d) => sink.push([c, d]) };
+  }
   setMenuBarVisibility() {}
   loadFile() {}
+  on() {}
+  focus() {}
+  close() {}
   isDestroyed() { return false; }
 }
 const fakeElectron = {
@@ -160,6 +169,28 @@ const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
   assert.ok(fs.readFileSync(inst.data.path).equals(payload));
   assert.strictEqual(path.dirname(inst.data.path), downloads);
   assert.ok(!quitCalled);
+
+  // 4d. Logvenster, debug aan/uit vanuit een ander venster, en "Test alle camera's" in één keer
+  const w0 = windowsCreated;
+  assert.ok((await call('log:open')).ok);
+  await call('log:open'); // tweede keer: bestaand venster, geen nieuw
+  assert.strictEqual(windowsCreated, w0 + 1);
+  const ok = await call('cfg:get');
+  ok.data.brighteye.port = 5200;
+  await call('cfg:save', ok.data);
+  assert.ok((await call('debug:set', { on: true })).ok);
+  assert.ok(events.some(([c, d]) => c === 'cfg:debug' && d === true));
+  await sleep(300);
+  events.length = 0;
+  assert.ok((await call('test:all')).ok);
+  await sleep(1200);
+  assert.strictEqual(logs().filter((l) => l.text === 'Camera is aan').length, 4);
+  assert.strictEqual(logs().filter((l) => /^Laatst opgeroepen preset: \d+$/.test(l.text)).length, 4);
+  assert.ok(logs().some((l) => /Brighteye bereikbaar/.test(l.text)));
+  const hist = (await call('log:history')).data;
+  assert.ok(Array.isArray(hist) && hist.length > 10);
+  assert.ok(logEvents.some(([c]) => c === 'log'), 'het logvenster krijgt ook de regels');
+  assert.ok(!JSON.parse(fs.readFileSync(path.join(userData, 'config.json'), 'utf8')).debug, 'debug wordt niet bewaard');
 
   // 5. Debug uit: lastPreset niet meer toegestaan
   bad.debug = false;

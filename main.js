@@ -52,6 +52,20 @@ app.setPath('userData', store.dataDir(app.getPath('appData')));
 
 /** @type {BrowserWindow|null} */
 let win = null;
+/** Het aparte logvenster (indien open). @type {BrowserWindow|null} */
+let logWin = null;
+/** Laatste logregels, zodat een nieuw geopend logvenster niet leeg start. */
+const logBuffer = [];
+const LOG_KEEP = 1000;
+
+/**
+ * Stuurt een bericht naar alle open vensters (hoofdvenster en logvenster).
+ * @param {string} channel
+ * @param {any} data
+ */
+function broadcast(channel, data) {
+  for (const w of [win, logWin]) if (w && !w.isDestroyed()) w.webContents.send(channel, data);
+}
 /** @type {Config|null} */
 let config = null;
 
@@ -76,7 +90,7 @@ const watcher = createWatcher({
     logTx(id, buf, '(debug)');
   },
   onLast: (id, preset) => {
-    if (win && !win.isDestroyed()) win.webContents.send('lastPreset', { t: Date.now(), camera: id, preset });
+    broadcast('lastPreset', { t: Date.now(), camera: id, preset });
   },
   log: (msg, id) => log({ dir: 'info', camera: id, hex: '', text: msg }),
   // Geen antwoord: de verbinding kan stilletjes zijn weggevallen. Sluiten; in debugmodus wordt ze meteen hersteld.
@@ -150,7 +164,8 @@ function saveConfig(next) {
   config = next;
   if (config.ipl) config.ipl.host = cleanHost(config.ipl.host); // "http://10.0.0.1/" -> "10.0.0.1"
   if (config.brighteye) config.brighteye.host = cleanHost(config.brighteye.host);
-  store.writeWithBackup(cfgPath(), JSON.stringify(config, null, 2));
+  // De debugstand wordt nooit bewaard (staat bij elke start uit); zo maakt het schakelen geen back-ups aan.
+  store.writeWithBackup(cfgPath(), JSON.stringify({ ...config, debug: false }, null, 2));
 }
 
 /**
@@ -203,7 +218,10 @@ function savePlan(p) {
  * @param {{dir:'tx'|'rx'|'err'|'info', camera?:number, hex:string}} entry
  */
 function log(entry) {
-  if (win && !win.isDestroyed()) win.webContents.send('log', { t: Date.now(), ...entry });
+  const e = { t: Date.now(), ...entry };
+  logBuffer.push(e);
+  if (logBuffer.length > LOG_KEEP) logBuffer.shift();
+  broadcast('log', e);
 }
 
 /**
@@ -441,6 +459,24 @@ const handlers = {
   'program:switch': (_e, { camera }) => brighteyeTake(camera),
   'program:status': () => brighteyeStatus(),
 
+  'log:history': () => logBuffer,
+  'log:open': () => createLogWindow(),
+  'debug:set': (_e, { on }) => {
+    const was = Boolean(config.debug);
+    config.debug = Boolean(on);
+    applyDebug(was);
+    broadcast('cfg:debug', config.debug); // houdt het vinkje in alle vensters gelijk
+  },
+  // "Test alle camera's": power-vraag per camera; met debug ook de laatste preset; en de Brighteye-status.
+  'test:all': async () => {
+    const fail = (id) => (e) => log({ dir: 'err', camera: id, hex: '', text: e.message });
+    await Promise.all(config.cameras.map((c) => sendVisca(c.id, visca.powerInquiry(c.viscaAddr)).catch(fail(c.id))));
+    if (config.debug) {
+      await new Promise((r) => setTimeout(r, 700));
+      for (const c of config.cameras) watcher.ask(c.id);
+    }
+    if (config.brighteye.enabled && config.brighteye.host) await brighteyeStatus().catch(fail());
+  },
   'app:info': () => ({ version: app.getVersion(), dataDir: app.getPath('userData') }),
 
   // Back-up van alle instellingen en koppelingen (config + zittingsplan) als één JSON-bestand.
@@ -487,6 +523,18 @@ const handlers = {
   },
 };
 
+/** Opent het aparte logvenster (of haalt het naar voren). */
+function createLogWindow() {
+  if (logWin && !logWin.isDestroyed()) { logWin.focus(); return; }
+  logWin = new BrowserWindow({
+    width: 1000, height: 650, backgroundColor: '#14171c', title: 'Verkeerslog – PTZ Backup',
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  logWin.setMenuBarVisibility(false);
+  logWin.loadFile(path.join(__dirname, 'renderer', 'log.html'));
+  logWin.on('closed', () => { logWin = null; });
+}
+
 /** Maakt het hoofdvenster. De renderer draait zonder Node-toegang (contextIsolation); alles loopt via preload.js. */
 function createWindow() {
   win = new BrowserWindow({
@@ -495,6 +543,7 @@ function createWindow() {
   });
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.on('closed', () => { win = null; if (logWin && !logWin.isDestroyed()) logWin.close(); });
 }
 
 app.whenReady().then(() => {

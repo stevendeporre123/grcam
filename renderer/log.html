@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>Verkeerslog – PTZ Backup</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="logwin">
+  <header class="logbar">
+    <h1>Verkeerslog</h1>
+    <label class="dbg" title="Houdt de IPL-verbindingen open en vraagt na elk camera-antwoord de laatst opgeroepen preset op"><input type="checkbox" id="debugSw"> Debug</label>
+    <button id="btnTest">Test alle camera's</button>
+    <span class="spacer"></span>
+    <label><input type="checkbox" id="fTx" checked> TX</label>
+    <label><input type="checkbox" id="fRx" checked> RX</label>
+    <label><input type="checkbox" id="fInfo" checked> Info</label>
+    <label><input type="checkbox" id="fErr" checked> Fouten</label>
+    <label><input type="checkbox" id="pause"> Pauzeer</label>
+    <button id="btnClear">Wissen</button>
+  </header>
+  <div id="lastPreset" hidden></div>
+  <pre id="logfull"></pre>
+  <script src="log-format.js"></script>
+  <script src="log.js"></script>
+</body>
+</html>

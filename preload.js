@@ -42,6 +42,16 @@ contextBridge.exposeInMainWorld('api', {
   lastPreset: (camera) => call('cam:lastPreset', { camera }),
   /** BrightEye: welke bron staat er op de programma-uitgang? (komt in het log) */
   programStatus: () => call('program:status'),
+  /** Open het logvenster. */
+  openLogWindow: () => call('log:open'),
+  /** Laatste logregels (voor een nieuw logvenster). */
+  logHistory: () => call('log:history'),
+  /** Debugmodus aan/uit (ook vanuit het logvenster). @param {boolean} on */
+  setDebug: (on) => call('debug:set', { on }),
+  /** "Test alle camera's" (power-vraag, met debug ook laatste preset, plus Brighteye-status). */
+  testAll: () => call('test:all'),
+  /** De debugstand is elders gewijzigd. @param {(on:boolean)=>void} fn */
+  onDebugChanged: (fn) => ipcRenderer.on('cfg:debug', (_e, on) => fn(on)),
   /** Versie van de app en de map waar de gegevens staan. */
   appInfo: () => call('app:info'),
   /** Back-up (config + plan) opvragen. */

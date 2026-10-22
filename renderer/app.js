@@ -15,7 +15,7 @@
  * Alle communicatie met camera's en schijf loopt via `window.api` (zie preload.js).
  */
 
-/* global jQuery, api, PlanView */
+/* global jQuery, api, PlanView, LogFormat */
 (() => {
   const { buildPlanSvg, isSpeaker, camColor, esc } = PlanView;
 
@@ -632,25 +632,19 @@
   });
 
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
-  $id('btnPing').addEventListener('click', async () => {
-    await Promise.all(cfg.cameras.map((c) => run(api.ping(c.id))));
-    // Debugmodus: daarna ook de laatst opgeroepen preset van elke camera opvragen.
-    if (cfg.debug) {
-      await new Promise((r) => setTimeout(r, 700));
-      await Promise.all(cfg.cameras.map((c) => run(api.lastPreset(c.id))));
-    }
-    // Brighteye (indien ingesteld): bereikbaarheid en huidige programma-bron in het log.
-    if (cfg.brighteye?.enabled && cfg.brighteye.host) await run(api.programStatus());
-  });
+  // Test alle camera's; de volledige test (met debug ook de laatste preset, plus Brighteye) loopt in het main-proces.
+  $id('btnPing').addEventListener('click', () => run(api.testAll()));
+  $id('btnLogWin').addEventListener('click', () => run(api.openLogWindow()));
+
+  // De debugstand kan ook in het logvenster gewijzigd worden.
+  api.onDebugChanged((on) => { cfg.debug = on; $id('debugSw').checked = on; if (!on) banner.hidden = true; });
 
   // Verkeerslog: maximaal 200 regels, TX = verstuurd, RX = antwoord
   const logEl = $id('log');
   api.onLog((e) => {
-    const time = new Date(e.t).toLocaleTimeString('nl-BE');
     const line = document.createElement('div');
     line.className = e.dir;
-    const hex = e.hex ? `${e.hex}` : '';
-    line.textContent = `${time} ${e.dir.toUpperCase()} ${e.camera ? `cam${e.camera}` : ''} ${hex}${e.text ? `${hex ? ' — ' : ''}${e.text}` : ''}`;
+    line.textContent = LogFormat.format(e);
     logEl.appendChild(line);
     while (logEl.childNodes.length > 200) logEl.removeChild(logEl.firstChild);
     logEl.scrollTop = logEl.scrollHeight;

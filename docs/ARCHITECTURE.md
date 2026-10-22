@@ -25,6 +25,8 @@ data-store.js        Vaste datamap, migratie en back-ups
 updater.js           Update-controle en download via GitHub Releases
 debug-watch.js       Debugmodus: na elke camera-completion de laatste preset opvragen
 renderer/
+  log.html, log.js     Apart logvenster (filters, debug, test)
+  log-format.js        Opmaak van een logregel (gedeeld)
   index.html         Markup + dialogen (CSP)
   style.css          Donker thema
   plan-view.js       SVG-opbouw van het zittingsplan (browser + Node)
@@ -89,6 +91,9 @@ Elk antwoord heeft de vorm `{ ok: true, data }` of `{ ok: false, error }`.
 | `cam:zoom` | `{camera, dir, speed}` | zoom starten/stoppen |
 | `program:switch` | `{camera}` | BrightEye: bron van die camera naar de programma-uitgang; log toont de bevestiging van de router |
 | `program:status` | – | BrightEye: bereikbaar? welke bron staat er op de programma-uitgang? (`@ X?0<dest>`) |
+| `log:open` / `log:history` | – | logvenster openen (of naar voren halen); laatste 1000 regels |
+| `debug:set` | `{on}` | debugmodus schakelen (ook vanuit het logvenster); `cfg:debug` houdt alle vensters gelijk |
+| `test:all` | – | power-vraag per camera; met debug ook laatste preset; plus Brighteye-status |
 | `app:info` | – | versie en datamap |
 | `backup:export` / `backup:import` | – / back-up | alle instellingen + plan als JSON; terugzetten valideert eerst |
 | `update:check` | – | laatste release ophalen (`GRCAM_UPDATE_API` overschrijft de GitHub-URL, voor tests) |

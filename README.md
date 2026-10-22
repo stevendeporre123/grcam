@@ -40,6 +40,12 @@ Tests: `npm test`. Windows-exe: `npm run dist`, of via GitHub Actions: push een 
 
 Beheer → **Bewerken** bij een zetel → *Zetel bewerken*: naam, fractie (of geen fractie) en micropostnummer. Cameranummers: Beheer → Instellingen → **Test** per camera; cameramarkeringen sleep je op het plan in Inleren-modus.
 
+## Log in een apart venster
+
+Beheer → **Log in apart venster** opent het verkeerslog groot in een eigen venster (handig op een tweede scherm), met filters
+(TX/RX/Info/Fouten), pauzeren, wissen, de debugschakelaar, *Test alle camera's* en de gele banner "Laatst opgeroepen". Het
+venster sluit mee met de app.
+
 ## Debug: preset van een micropost ontdekken
 
 Beheer → **Debug: laatste preset tonen**. Activeer in de zaal een micropost: na het antwoord van de camera vraagt de app de laatst opgeroepen preset op en toont boven het zaalplan *Laatst opgeroepen: camera x preset yy*. Koppel die daarna aan de zetel. Staat uit bij elke start; niet tijdens een zitting gebruiken.

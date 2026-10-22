@@ -78,3 +78,12 @@ body.learning .cam { cursor:grab; }
 #dlgUpdate .notes { max-height:200px; overflow:auto; white-space:pre-wrap; background:#0f1217; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12px; }
 #dlgUpdate progress { width:100%; }
 #dlgSettings .chk { flex-direction:row; align-items:center; gap:8px; }
+
+/* Apart logvenster */
+body.logwin { display:flex; flex-direction:column; height:100vh; margin:0; }
+.logbar { display:flex; align-items:center; gap:12px; padding:8px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.logbar h1 { font-size:16px; margin:0 8px 0 0; }
+.logbar label { display:flex; align-items:center; gap:4px; color:var(--mute); }
+.logwin #lastPreset { margin:8px 14px 0; }
+#logfull { white-space:pre-wrap; word-break:break-word; flex:1; margin:0; padding:10px 14px; overflow:auto; font:13px/1.55 ui-monospace, Consolas, monospace; color:var(--mute); }
+#logfull .tx { color:#93c5fd; } #logfull .rx { color:#86efac; } #logfull .err { color:#fca5a5; } #logfull .info { color:#fde68a; }
