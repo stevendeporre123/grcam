@@ -436,9 +436,9 @@ async function brighteyeTake(camera) {
  * @returns {Promise<void>}
  */
 async function brighteyeStatus() {
-  // Alle bestemmingen 0-3 opvragen: zo zie je welke uitgang PGM is en welke preview. De ingestelde bestemming staat erbij.
+  // Alle bestemmingen 0-7 opvragen: zo zie je welke uitgang PGM is en welke preview. De ingestelde bestemming staat erbij.
   const mine = Number(config.brighteye.dest) || 0;
-  for (let d = 0; d <= 3; d++) {
+  for (let d = 0; d <= 7; d++) {
     const cmd = statusCommand(d);
     const reply = await brighteyeExchange(cmd);
     const st = parseStatus(reply)[0];
