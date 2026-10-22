@@ -279,7 +279,7 @@ function getSocket(host, port, camId) {
       }
     });
     sock.on('error', (e) => { conns.delete(key); reject(e); });
-    sock.on('close', () => { conns.delete(key); if (config.debug) setTimeout(openDebugConnections, 3000); });
+    sock.on('close', () => { if (conns.get(key) === entry) conns.delete(key); scheduleReconnect(); });
   });
 }
 
@@ -303,14 +303,32 @@ async function sendVisca(camId, buf) {
 function openDebugConnections() {
   if (!config.debug) return;
   for (const c of config.cameras) {
-    getSocket(config.ipl.host, c.port, c.id).catch((e) => log({ dir: 'err', camera: c.id, hex: `debug: ${e.message}` }));
+    const key = `${config.ipl.host}:${c.port}`;
+    const ex = conns.get(key);
+    if ((ex && !ex.sock.destroyed) || connecting.has(key)) continue; // niet dubbel verbinden
+    connecting.add(key);
+    getSocket(config.ipl.host, c.port, c.id)
+      .then(() => { reconnectDelay = 3000; })
+      .catch((e) => {
+        if (!failLogged.has(key)) { failLogged.add(key); log({ dir: 'err', camera: c.id, hex: `debug: ${e.message}`, text: `Verbinden met de IPL (poort ${c.port}) lukt niet; nieuwe pogingen op de achtergrond` }); }
+      })
+      .finally(() => { connecting.delete(key); if (conns.has(key)) failLogged.delete(key); });
   }
 }
-
-/**
- * Past de debugmodus toe na het bewaren van de config: aan = permanente verbindingen, uit = sluiten.
- * @param {boolean} wasOn
- */
+/** Verbindingen die nu opgebouwd worden, en voor welke poort de fout al gelogd is. */
+const connecting = new Set();
+const failLogged = new Set();
+let reconnectTimer = null;
+let reconnectDelay = 3000;
+/** Eén herverbinding tegelijk, met oplopende wachttijd (3 s tot 30 s) zodat een onbereikbare IPL niet bestookt wordt. */
+function scheduleReconnect() {
+  if (!config || !config.debug || reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+    openDebugConnections();
+  }, reconnectDelay);
+}
 function applyDebug(wasOn) {
   watcher.setEnabled(config.debug);
   if (config.debug) { openDebugConnections(); return; }
@@ -352,22 +370,31 @@ function brighteyeError(e) {
  * @returns {Promise<string>} volledig antwoord van de router
  * @throws {Error} met een leesbare melding
  */
+let beQueue = Promise.resolve();
 async function brighteyeExchange(cmd, camera) {
   const b = config.brighteye;
   if (!b.enabled || !b.host) throw new Error('Brighteye-koppeling is niet ingesteld (Beheer → Instellingen)');
   let reply = '';
-  try {
+  const run = async () => {
     await new Promise((resolve, reject) => {
       const s = net.createConnection({ host: b.host, port: b.port });
-      s.setTimeout(3000, () => s.destroy(new Error('Time-out Brighteye')));
+      let done = false;
+      const finish = (err) => { if (done) return; done = true; s.destroy(); err ? reject(err) : resolve(); };
+      s.setTimeout(3000, () => finish(new Error('Time-out Brighteye')));
       s.on('connect', () => s.write(cmd));
       s.on('data', (d) => {
         reply += d.toString('latin1');
-        if (reply.includes('>')) s.end(); // prompt = klaar voor de volgende opdracht
+        if (reply.includes('>')) finish(); // prompt = klaar; meteen sluiten, niet wachten op de router
       });
-      s.on('close', resolve);
-      s.on('error', reject);
+      s.on('close', () => finish());
+      s.on('error', finish);
     });
+  };
+  try {
+    // Opdrachten één voor één: de router laat maar weinig gelijktijdige verbindingen toe.
+    const turn = beQueue.then(run, run);
+    beQueue = turn.catch(() => {});
+    await turn;
   } catch (e) {
     const msg = brighteyeError(e);
     log({ dir: 'err', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: msg });
