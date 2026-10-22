@@ -84,6 +84,7 @@ const call = async (ch, arg) => {
   return r;
 };
 const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
+const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (events[i][0] === 'log') events.splice(i, 1); };
 
 (async () => {
   await new Promise((r) => gh.once('listening', r));
@@ -147,6 +148,53 @@ const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
   assert.ok(logs().some((l) => /Camera 3 naar PVW \(preview\) schakelen \(bestemming 1\)/.test(l.text)), JSON.stringify(logs()));
   assert.strictEqual((await call('preset:try', { camera: 3, preset: 999 })).ok, false);
   assert.ok((await call('preset:try', { camera: 3, preset: 7 })).ok);
+
+  // 3c. Klik op een zetel: preset + PGM, met alternatief als dezelfde camera al live staat
+  const fast = (await call('cfg:get')).data;
+  fast.timing = { takeDelayMs: 40, altHoldMs: 150 };
+  assert.ok((await call('cfg:save', fast)).ok);
+  logsReset();
+  let g = await call('seat:go', { camera: 3, preset: 5 });
+  assert.ok(g.ok && g.data.mode === 'direct' && g.data.live === 2, JSON.stringify(g)); // camera 2 staat live (bron 1 op PGM)
+  await sleep(200);
+  assert.ok(logs().some((l) => /Camera 3 naar PGM \(programma\) schakelen \(bestemming 0\)/.test(l.text)), 'andere camera: take na wachttijd');
+  logsReset();
+  g = await call('seat:go', { camera: 3, preset: 6, alt: { camera: 4, preset: 9 } });
+  assert.strictEqual(g.data.mode, 'alt', JSON.stringify(g));
+  await sleep(120);
+  assert.ok(logs().some((l) => /Camera 4 naar PGM/.test(l.text)), 'alternatief eerst');
+  assert.ok(!logs().some((l) => /Camera 3 naar PGM/.test(l.text)), 'hoofdcamera nog niet');
+  await sleep(300);
+  assert.ok(logs().some((l) => /Camera 3 naar PGM/.test(l.text)), 'daarna de hoofdcamera');
+  // een nieuwe klik annuleert de wachtende schakeling
+  logsReset();
+  await call('seat:go', { camera: 3, preset: 6, alt: { camera: 4, preset: 9 } });
+  await call('seat:go', { camera: 1, preset: 2 });
+  await sleep(400);
+  assert.ok(!logs().some((l) => /Camera 3 naar PGM/.test(l.text)), 'vervallen schakeling');
+  assert.ok(logs().some((l) => /Oude naam naar PGM/.test(l.text)));
+
+  // 3d. Autofocus
+  logsReset();
+  assert.ok((await call('cam:focus', { camera: 2 })).ok);
+  assert.ok(logs().some((l) => l.dir === 'tx' && l.text === 'Autofocus uitvoeren'));
+
+  // 3e. Microposten-API (long polling) -> 'mics'-event
+  let n = 0;
+  const micSrv = http.createServer((req, res) => {
+    setTimeout(() => res.end(JSON.stringify({ active: n++ < 2 ? [{ micId: 12 }] : [{ micId: 12 }, { micId: 30 }] })), 30);
+  }).listen(0, '127.0.0.1');
+  await new Promise((r) => micSrv.on('listening', r));
+  const mc = (await call('cfg:get')).data;
+  mc.micApi = { enabled: true, url: `http://127.0.0.1:${micSrv.address().port}/`, headers: '', activePath: '', idField: '', timeoutMs: 5000 };
+  assert.ok((await call('cfg:save', mc)).ok);
+  await sleep(1500);
+  const mics = events.filter(([c]) => c === 'mics').map(([, d]) => d.active.join(','));
+  assert.deepStrictEqual(mics.slice(0, 2), ['12', '12,30'], JSON.stringify(mics));
+  assert.deepStrictEqual((await call('mic:state')).data.active, [12, 30]);
+  mc.micApi.enabled = false;
+  await call('cfg:save', mc);
+  micSrv.close();
 
   // 4. Brighteye onbereikbaar: leesbare fout
   const bad = (await call('cfg:get')).data;

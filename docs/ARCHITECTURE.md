@@ -215,3 +215,10 @@ node tools/mock-ipl.js       # nep-IPL + nep-BrightEye; zet de hosts in de app o
 4. Welke camera bij welke IPL-poort hoort, en de markeerposities op het plan.
 5. Welke presetnummers de NI-700 al gebruikt (vooral voor Zaal 1 en Zaal 2: koppelen met *Enkel koppelen*).
 6. BrightEye Profile: bron-nummers per camera en bestemming van de uitgang naar de encoder.
+
+## Aanvullingen (schakelen, microposten)
+
+- `main.js` `goTo()`: preset + PGM-take; leest eerst de BrightEye-status (`pgmSource()`) om te weten of de camera al live staat; vertraagde stappen worden geannuleerd met de teller `goSeq`.
+- `mic-api.js`: long-poll-lezer met tolerante uitlezing (`extractActive`), headers (`parseHeaders`) en backoff; geeft `mics`-events door aan de UI.
+- Events naar de UI: `pgm` ({camera}), `mics` ({active}).
+- `assign[id]` kan `alt:{camera,preset}` bevatten.

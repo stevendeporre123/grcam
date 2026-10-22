@@ -23,3 +23,5 @@ assert.throws(() => v.panTilt(1, 'sideways'));
 assert.strictEqual(v.presetRecall(1, 500)[5], 127); // clamp
 
 console.log('visca: ok');
+assert.deepStrictEqual([...v.focusTrigger(2)], [0x82, 0x01, 0x04, 0x18, 0x01, 0xff]);
+console.log('visca: focus ok');

@@ -59,7 +59,7 @@ for (const view of ['zaal', 'ambtenaren']) {
 assert.strictEqual(esc('<a href="x">&'), '&lt;a href=&quot;x&quot;&gt;&amp;');
 
 // configstructuur voor de zaalknoppen
-assert.strictEqual(cfg.zaal.length, 2);
+assert.strictEqual(cfg.zaal.length, 4);
 assert.deepStrictEqual(cfg.assign, {});
 
 console.log(`plan: ok (${plan.seats.length} zetels, ${speakers.length} sprekers)`);

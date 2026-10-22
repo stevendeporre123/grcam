@@ -42,9 +42,20 @@ h1 { font-size:17px; margin:0; } h2 { font-size:15px; margin:0 0 8px; } h3 { mar
 .seat text { fill:#e6e9ee; pointer-events:none; font-family:system-ui, "Segoe UI", sans-serif; }
 .seat.free text { fill:#8a93a1; }
 .seat:not(.off):hover .base { stroke-opacity:1; filter:brightness(1.4); }
-.seat.active .base { stroke:#fff !important; stroke-width:3.4 !important; }
+.seat.active .base { stroke:var(--act,#fff) !important; stroke-width:4.2 !important; filter:drop-shadow(0 0 6px var(--act,#fff)); animation:pulse 1.3s ease-in-out infinite; }
+@keyframes pulse { 50% { stroke-width:6; filter:drop-shadow(0 0 12px var(--act,#fff)); } }
+.seat.mic-on .base { stroke:#ef4444 !important; stroke-width:3.6 !important; filter:drop-shadow(0 0 5px #ef4444); }
+.seat.mic-on.active .base { stroke:var(--act,#fff) !important; }
+.link { stroke-width:2.5; stroke-dasharray:7 5; opacity:.85; pointer-events:none; }
+.micinfo { align-self:stretch; background:#3b1212; border:1px solid #b91c1c; color:#fecaca; border-radius:8px; padding:8px 12px; font-weight:600; }
 .seat.pending .base { stroke:#fbbf24 !important; }
-.cam { cursor:pointer; } .cam.sel circle { stroke:#fff; stroke-width:3; }
+.cam { cursor:pointer; }
+.cam .ring, .cam .pgm-tag { display:none; }
+.cam.sel .sel-ring { display:inline; stroke:#fff; stroke-width:2.5; }
+.cam.pgm .pgm-ring { display:inline; stroke:#ef4444; stroke-width:3.5; }
+.cam.pgm .pgm-tag { display:inline; fill:#fff; paint-order:stroke; stroke:#b91c1c; stroke-width:4px; }
+.camsel button.pgm { box-shadow:inset 0 0 0 2px #ef4444; }
+.zaal button.active { box-shadow:0 0 0 3px var(--act,#fff); }
 .plan-bg { fill:none; stroke:#2c333d; } .plan-grey { fill:#232932; }
 
 button, input, select { font:inherit; color:var(--text); background:#262d37; border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
@@ -87,3 +98,10 @@ body.logwin { display:flex; flex-direction:column; height:100vh; margin:0; }
 .logwin #lastPreset { margin:8px 14px 0; }
 #logfull { white-space:pre-wrap; word-break:break-word; flex:1; margin:0; padding:10px 14px; overflow:auto; font:13px/1.55 ui-monospace, Consolas, monospace; color:var(--mute); }
 #logfull .tx { color:#93c5fd; } #logfull .rx { color:#86efac; } #logfull .err { color:#fca5a5; } #logfull .info { color:#fde68a; }
+
+dialog.floating { position:fixed; margin:0; left:auto; right:370px; top:60px; max-height:calc(100vh - 80px); overflow:auto; box-shadow:0 8px 30px rgba(0,0,0,.6); }
+.altbox { border:1px dashed var(--line); border-radius:8px; padding:8px 10px; margin-bottom:10px; }
+.alt-title { color:var(--mute); font-size:12px; margin-bottom:6px; }
+.altrow { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.altbtns { display:flex; gap:8px; flex-wrap:wrap; }
+dialog textarea { font:inherit; color:var(--text); background:#262d37; border:1px solid var(--line); border-radius:6px; padding:6px 10px; }

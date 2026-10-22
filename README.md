@@ -86,3 +86,23 @@ Volledige technische documentatie (dataflow, IPC, bestandsformaten, protocollen,
 ## Preset uitproberen
 
 Beheer → *Preset uitproberen*: kies een camera en een presetnummer en roep die op, optioneel meteen naar PVW (preview, bestemming 0) of PGM (programma, bestemming 1) op de BrightEye. De bestemmingen zijn instelbaar. Zo zie je of een preset bestaat en welke zitplaats erbij hoort, zonder debugmodus. Debug stuurt extra vragen naar de camera's die ook de NI-700 ziet; gebruik het niet tijdens een zitting.
+
+## Klikken op een plaats: preset + PGM
+
+Een klik op een zetel of zaalknop roept de preset op en zet die camera meteen op PGM (zonder bevestiging, als de BrightEye-koppeling aanstaat).
+- Staat de camera niet live: preset oproepen, `Wachttijd` (Instellingen → Schakelen, standaard 1,5 s) wachten tot de camera er staat, dan PGM.
+- Staat dezelfde camera al live en is er een **alternatief** ingesteld (camera + preset, in het koppelvenster): eerst de alternatieve camera op PGM, na `Hoe lang de alternatieve camera live blijft` (standaard 4 s) de hoofdcamera, zodat die ongezien kan verplaatsen.
+- Een nieuwe klik annuleert een wachtende schakeling.
+- Zaalknoppen: Zaal 1 t/m 4 (één overzichtspreset per camera).
+
+## Inleren met de joystick
+
+In inleermodus blijft het koppelvenster openstaan (niet-modaal) zodat de joystick, zoom en **Autofocus** (VISCA One Push AF) rechts bruikbaar blijven. *Oproepen* toont de preset, *Opslaan in camera* bewaart de huidige positie; hetzelfde voor het alternatief.
+
+## Wat staat er live?
+
+De actieve plaats krijgt een dikke pulserende rand in de camerakleur en een stippellijn naar de camera; de camera op PGM heeft een rode ring met "PGM". Zetels waarvan de micropost actief is (microposten-API) lichten rood op, met de namen boven het plan.
+
+## Microposten-API (long polling)
+
+Instellingen → Microposten-API: URL, optionele headers, en eventueel het pad naar de actieve microposten (`data.active`) en het veld met het nummer (`micId`). Leeg = automatisch zoeken. *Test* toont het ruwe antwoord in het verkeerslog. De poller (`mic-api.js`) doet één verzoek tegelijk en start het volgende zodra het antwoord binnen is; bij fouten wacht hij steeds langer (2 s tot 30 s) en logt de fout één keer. De koppeling met een zetel loopt via het micropostnummer in het zetelvenster.

@@ -38,6 +38,9 @@
   let selCam = 1;
   /** Zetel- of zaal-id die laatst succesvol is opgeroepen (wordt gemarkeerd). */
   let activeId = null;
+  /** Camera die nu op PGM staat (melding van het main-proces) en actieve microposten (API). */
+  let pgmCam = null;
+  let micActive = [];
   /** Zetel- of zaal-id dat in de inleer-modal bewerkt wordt. */
   let editingId = null;
   /** Spiegelgegevens van de laatst getekende plan (voor het slepen van camera's). */
@@ -88,7 +91,7 @@
   /** Tekent het zittingsplan (zetels, camera's, gekozen richting) in de SVG. */
   function renderPlan() {
     const svg = $id('plan');
-    const { viewBox, html, flip, mx, my } = buildPlanSvg(plan, cfg.assign, { view: cfg.view, cameras: cfg.cameras, selCam });
+    const { viewBox, html, flip, mx, my } = buildPlanSvg(plan, cfg.assign, { view: cfg.view, cameras: cfg.cameras, selCam, pgmCam });
     geom = { flip, mx, my };
     svg.setAttribute('viewBox', viewBox);
     svg.innerHTML = html;
@@ -104,12 +107,60 @@
     await persist();
   });
 
-  /** Markeert de laatst opgeroepen zetel of zaalknop. */
+  /** Verschuiving "translate(x y)" van een SVG-groep als getallen. @param {Element|null} g */
+  const posOf = (g) => {
+    const m = /translate\(([-\d.]+)[ ,]+([-\d.]+)\)/.exec(g?.getAttribute('transform') || '');
+    return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+  };
+
+  /**
+   * Markeert de laatst opgeroepen zetel of zaalknop: dikke pulserende rand in de kleur van de camera
+   * en een stippellijn van die camera naar de zetel. Markeert ook de PGM-camera en de actieve microposten.
+   */
   function markActive() {
     document.querySelectorAll('.seat.active, .zaal button.active').forEach((e) => e.classList.remove('active'));
-    if (!activeId) return;
-    document.querySelector(`.seat[data-id="${CSS.escape(activeId)}"]`)?.classList.add('active');
-    document.querySelector(`.zaal button[data-id="${CSS.escape(activeId)}"]`)?.classList.add('active');
+    document.querySelectorAll('#plan .link').forEach((e) => e.remove());
+    const a = activeId && cfg.assign[activeId];
+    const col = a ? camColor(a.camera) : '#fff';
+    $id('now').style.borderLeft = `6px solid ${a ? col : 'var(--line)'}`;
+    if (activeId) {
+      const seat = document.querySelector(`.seat[data-id="${CSS.escape(activeId)}"]`);
+      if (seat) {
+        seat.classList.add('active');
+        seat.style.setProperty('--act', col);
+        const cam = a && document.querySelector(`#plan .cam[data-cam="${a.camera}"]`);
+        const p1 = posOf(cam); const p2 = posOf(seat);
+        if (p1 && p2) $id('plan').querySelector('.seat').insertAdjacentHTML('beforebegin', `<line class="link" x1="${p1.x}" y1="${p1.y}" x2="${p2.x}" y2="${p2.y}" stroke="${col}"/>`);
+      }
+      const zb = document.querySelector(`.zaal button[data-id="${CSS.escape(activeId)}"]`);
+      if (zb) { zb.classList.add('active'); zb.style.setProperty('--act', col); }
+    }
+    markCams();
+    markMics();
+  }
+
+  /** Toont welke camera op PGM staat (rode ring + label) en welke camera geselecteerd is (witte ring). */
+  function markCams() {
+    document.querySelectorAll('#plan .cam').forEach((c) => c.classList.toggle('pgm', pgmCam !== null && Number(c.dataset.cam) === pgmCam));
+    document.querySelectorAll('#camSel button').forEach((b) => b.classList.toggle('pgm', pgmCam !== null && Number(b.dataset.cam) === pgmCam));
+  }
+
+  /** Markeert de zetels waarvan de micropost actief is volgens de API en toont de namen boven het plan. */
+  function markMics() {
+    const on = new Set(micActive);
+    const names = [];
+    document.querySelectorAll('#plan .seat').forEach((g) => {
+      const s = seatOf(g.dataset.id);
+      const hit = Boolean(s && s.mic != null && on.has(s.mic));
+      g.classList.toggle('mic-on', hit);
+      if (hit) names.push(`${s.naam} (mic ${s.mic})`);
+    });
+    const unknown = micActive.filter((m) => !plan.seats.some((s) => s.mic === m));
+    const el = $id('micInfo');
+    el.hidden = !micActive.length;
+    el.textContent = micActive.length
+      ? `Micropost aan: ${[...names, ...unknown.map((m) => `onbekende micropost ${m}`)].join(', ')}`
+      : '';
   }
 
   /** Tekent de zaalknoppen; de randkleur toont de gekoppelde camera. */
@@ -124,7 +175,7 @@
   /** Tekent de vier camerakeuzeknoppen. */
   function renderCamSel() {
     $id('camSel').innerHTML = cfg.cameras.map((c) =>
-      `<button data-cam="${c.id}" class="${c.id === selCam ? 'sel' : ''}" style="border-color:${camColor(c.id)}">${c.id}</button>`).join('');
+      `<button data-cam="${c.id}" class="${c.id === selCam ? 'sel' : ''}${c.id === pgmCam ? ' pgm' : ''}" style="border-color:${camColor(c.id)}">${c.id}</button>`).join('');
   }
 
   /**
@@ -134,7 +185,7 @@
   function setNow(id) {
     const a = cfg.assign[id];
     $id('now').innerHTML = a
-      ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}`
+      ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}${a.alt ? `<br><span class="mute">alternatief: ${esc(camName(a.alt.camera))} · preset ${a.alt.preset}</span>` : ''}`
       : `<b>${esc(labelOf(id))}</b>Nog niet gekoppeld`;
   }
 
@@ -148,8 +199,10 @@
     setNow(id);
     if (!a) { toast(`${labelOf(id)}: nog geen camerapreset gekoppeld`); return; }
     selectCamera(a.camera);
-    const r = await run(api.preset(a.camera, a.preset));
-    if (r.ok) { activeId = id; markActive(); }
+    activeId = id; markActive(); // meteen tonen wat je gekozen hebt; bij een fout hieronder terugzetten
+    const r = await run(api.seatGo({ camera: a.camera, preset: a.preset, alt: a.alt }));
+    if (!r.ok) { activeId = null; markActive(); return; }
+    if (r.data?.mode === 'alt') toast(`${camName(a.camera)} staat al live: eerst ${camName(a.alt.camera)}, straks ${camName(a.camera)}`);
   }
 
   /**
@@ -277,10 +330,21 @@
     f.camera.value = a?.camera ?? selCam;
     f.preset.value = a?.preset ?? nextFree(Number(f.camera.value));
     // Bij een nieuwe koppeling volgt het presetvoorstel de gekozen camera.
-    if (!a) f.camera.onchange = () => { f.preset.value = nextFree(Number(f.camera.value)); };
-    else f.camera.onchange = null;
+    f.camera.onchange = () => {
+      if (!a) f.preset.value = nextFree(Number(f.camera.value));
+      selectCamera(Number(f.camera.value));
+    };
+    // Alternatief: camera (of geen) + preset
+    const camOpts = cfg.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    f.altCamera.innerHTML = '<option value="">— geen —</option>' + camOpts;
+    f.altCamera.value = a?.alt ? String(a.alt.camera) : '';
+    f.altPreset.value = a?.alt?.preset ?? '';
+    document.querySelectorAll('.seat.pending').forEach((e) => e.classList.remove('pending'));
     document.querySelector(`.seat[data-id="${CSS.escape(id)}"]`)?.classList.add('pending');
-    $id('dlgAssign').showModal();
+    selectCamera(Number(f.camera.value)); // de joystick rechts bestuurt meteen de camera van deze plaats
+    const dlg = $id('dlgAssign');
+    if (dlg.open) return; // in inleermodus blijft het venster openstaan; we hebben enkel de velden herladen
+    if (learn) { dlg.classList.add('floating'); dlg.show(); } else { dlg.classList.remove('floating'); dlg.showModal(); }
   }
 
   /** Sluit de inleer-modal en haalt de markering van de zetel weg. */
@@ -291,12 +355,19 @@
 
   /**
    * Leest camera en preset uit de modal.
-   * @returns {{camera:number, preset:number}|null} null als het formulier ongeldig is
+   * @returns {{camera:number, preset:number, alt?:{camera:number,preset:number}}|null} null als het formulier ongeldig is
    */
   function assignFromForm() {
     const f = $id('formAssign');
     if (!f.reportValidity()) return null;
-    return { camera: Number(f.camera.value), preset: Number(f.preset.value) };
+    const out = { camera: Number(f.camera.value), preset: Number(f.preset.value) };
+    if (f.altCamera.value !== '') {
+      const alt = { camera: Number(f.altCamera.value), preset: Number(f.altPreset.value) };
+      if (f.altPreset.value === '' || !Number.isInteger(alt.preset) || alt.preset < 0 || alt.preset > 127) { toast('Vul een presetnummer (0-127) in voor het alternatief'); return null; }
+      if (alt.camera === out.camera) { toast('Het alternatief moet een andere camera zijn dan de hoofdcamera'); return null; }
+      out.alt = alt;
+    }
+    return out;
   }
 
   /**
@@ -316,6 +387,29 @@
   }
 
   $id('aCancel').addEventListener('click', closeAssign);
+
+  // "Oproepen": de preset van deze plaats op de camera tonen (zonder PGM te wijzigen)
+  $id('aGo').addEventListener('click', () => {
+    const f = $id('formAssign');
+    if (f.preset.value === '') { toast('Vul een presetnummer in'); return; }
+    selectCamera(Number(f.camera.value));
+    run(api.preset(Number(f.camera.value), Number(f.preset.value)));
+  });
+  $id('aAltGo').addEventListener('click', () => {
+    const f = $id('formAssign');
+    if (f.altCamera.value === '' || f.altPreset.value === '') { toast('Kies eerst een alternatieve camera en preset'); return; }
+    selectCamera(Number(f.altCamera.value));
+    run(api.preset(Number(f.altCamera.value), Number(f.altPreset.value)));
+  });
+  // "Alternatief opslaan in camera": huidige positie van de alternatieve camera bewaren onder het alternatieve presetnummer
+  $id('aAltStore').addEventListener('click', async () => {
+    const f = $id('formAssign');
+    if (f.altCamera.value === '' || f.altPreset.value === '') { toast('Kies eerst een alternatieve camera en preset'); return; }
+    const cam = Number(f.altCamera.value); const pre = Number(f.altPreset.value);
+    if (!confirm(`Huidige positie van ${camName(cam)} opslaan als preset ${pre}? De bestaande preset ${pre} in de camera wordt overschreven.`)) return;
+    const r = await run(api.presetStore(cam, pre));
+    if (r.ok) toast(`${camName(cam)}: preset ${pre} opgeslagen. Klik "Enkel koppelen" om het alternatief te bewaren.`);
+  });
 
   // "Zetelgegevens opslaan": naam, fractie en micropostnummer van de zetel bewaren
   $id('sSave').addEventListener('click', async () => {
@@ -406,6 +500,7 @@
       hold(b, () => run(api.zoom(selCam, b.dataset.zoom, 3)), () => run(api.zoom(selCam, 'stop')));
     });
     $id('btnHome').addEventListener('click', () => run(api.home(selCam)));
+    $id('btnAF').addEventListener('click', () => run(api.focus(selCam)));
   }
 
   // ---------- Beheer ----------
@@ -520,6 +615,11 @@
     f.bHost.value = cfg.brighteye.host || '';
     f.bPort.value = cfg.brighteye.port || 5200;
     f.bDest.value = cfg.brighteye.dest ?? 1;
+    f.tTake.value = cfg.timing?.takeDelayMs ?? 1500;
+    f.tAlt.value = cfg.timing?.altHoldMs ?? 4000;
+    const m = cfg.micApi || {};
+    f.mEnabled.checked = !!m.enabled; f.mUrl.value = m.url || ''; f.mHeaders.value = m.headers || '';
+    f.mPath.value = m.activePath || ''; f.mId.value = m.idField || '';
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
     $id('dlgSettings').showModal();
   });
@@ -532,7 +632,14 @@
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
+    cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
+    cfg.micApi = { ...(cfg.micApi || {}), enabled: f.mEnabled.checked, url: f.mUrl.value.trim(), headers: f.mHeaders.value, activePath: f.mPath.value.trim(), idField: f.mId.value.trim() };
     await persist();
+  });
+  $id('mTest').addEventListener('click', async () => {
+    const f = $id('formSettings');
+    const r = await run(api.micTest({ url: f.mUrl.value.trim(), headers: f.mHeaders.value, activePath: f.mPath.value.trim(), idField: f.mId.value.trim() }));
+    if (r.ok) toast(`Microposten-API: HTTP ${r.data.status}, zie het verkeerslog voor het antwoord`);
   });
 
   // ---------- Updates ----------
@@ -638,6 +745,10 @@
     banner.hidden = !cfg.debug;
   });
 
+  // Camera op PGM en actieve microposten komen uit het main-proces
+  api.onPgm((d) => { pgmCam = d.camera ?? null; renderCamSel(); markCams(); });
+  api.onMics((d) => { micActive = d.active || []; markMics(); });
+
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
   // Test alle camera's; de volledige test (met debug ook de laatste preset, plus Brighteye) loopt in het main-proces.
   $id('btnPing').addEventListener('click', () => run(api.testAll()));
@@ -693,6 +804,7 @@
     cfg = (await api.getConfig()).data;
     plan = (await api.getPlan()).data;
     buildPad();
+    micActive = (await api.micState()).data?.active || [];
     renderAll();
     initTable();
     refreshTable();

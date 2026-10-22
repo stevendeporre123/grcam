@@ -21,6 +21,7 @@ const visca = require('./visca');
 const { createWatcher, splitMessages } = require('./debug-watch');
 const { describe, describeCommand, queryKind } = require('./visca-decode');
 const { takeCommand, statusCommand, parseStatus } = require('./brighteye');
+const { createPoller } = require('./mic-api');
 const store = require('./data-store');
 const { cleanHost } = require('./host');
 const updater = require('./updater');
@@ -148,6 +149,11 @@ function normalizeConfig(raw) {
   c.brighteye = { ...defaults.brighteye, ...c.brighteye };
   c.ipl.host = cleanHost(c.ipl.host);
   c.brighteye.host = cleanHost(c.brighteye.host);
+  c.timing = { ...defaults.timing, ...c.timing };
+  c.micApi = { ...defaults.micApi, ...c.micApi };
+  // Ontbrekende zaalknoppen (zaal3, zaal4 bij een oudere config) aanvullen; bestaande labels blijven.
+  const haveZ = new Set((c.zaal || []).map((z) => z.id));
+  c.zaal = [...(c.zaal || []), ...defaults.zaal.filter((z) => !haveZ.has(z.id))];
   c.debug = false; // debugmodus staat bij elke start uit (houdt anders IPL-verbindingen open)
   // Ontbrekende cameravelden (bv. positie op het plan) aanvullen vanuit de standaard.
   // Ontbrekende camera's (id 1-4) worden bijgemaakt.
@@ -418,12 +424,19 @@ const camOfSource = (src) => {
  * @param {number} camera
  * @returns {Promise<void>}
  */
+/** Camera die als laatste door deze app naar PGM geschakeld werd (voor het geval de BrightEye niet bevraagd kan worden). */
+let pgmCam = null;
+/** Teller om een lopende, vertraagde schakeling te annuleren zodra er opnieuw geklikt wordt. */
+let goSeq = 0;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function brighteyeTake(camera, target = 'pgm') {
   const cam = camById(camera);
   const dest = target === 'pvw' ? Number(config.brighteye.pvwDest ?? 0) : Number(config.brighteye.dest ?? 1);
   const cmd = takeCommand(dest, cam.beSource);
   const reply = await brighteyeExchange(cmd, camera);
   const st = parseStatus(reply)[0];
+  if (target !== 'pvw') { pgmCam = cam.id; broadcast('pgm', { camera: cam.id }); }
   log({ dir: 'tx', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: `Brighteye: ${cam.name} naar ${target === 'pvw' ? 'PVW (preview)' : 'PGM (programma)'} schakelen (bestemming ${dest})` });
   log({
     dir: 'rx', camera, hex: `brighteye: ${JSON.stringify(reply)}`,
@@ -453,6 +466,83 @@ async function brighteyeStatus() {
   }
 }
 
+/**
+ * Welke camera staat nu op PGM? Vraagt de BrightEye; bij een fout geldt de laatst bekende stand.
+ * @returns {Promise<number|null>} camera-id of null als onbekend
+ */
+async function pgmSource() {
+  try {
+    const reply = await brighteyeExchange(statusCommand(Number(config.brighteye.dest ?? 1)));
+    const st = parseStatus(reply)[0];
+    const cam = st && config.cameras.find((c) => (c.beSource ?? -1) === st.src);
+    pgmCam = cam ? cam.id : null;
+  } catch { /* de fout staat al in het log; we gaan uit van de laatst bekende stand */ }
+  broadcast('pgm', { camera: pgmCam });
+  return pgmCam;
+}
+
+/**
+ * Klik op een zetel of zaalknop: preset oproepen en de camera naar PGM schakelen (zonder bevestiging).
+ * - Andere camera dan nu op PGM: preset oproepen, `timing.takeDelayMs` wachten tot de camera er staat, dan PGM.
+ * - Dezelfde camera die al live staat en er is een alternatief: eerst de alternatieve camera/preset op PGM,
+ *   `timing.altHoldMs` later de hoofdcamera, zodat die ongezien kan verplaatsen.
+ * - Dezelfde camera zonder alternatief: enkel de preset oproepen (de camera is al live).
+ * De opdracht is meteen terug na het oproepen; het vervolg loopt op de achtergrond en vervalt bij een nieuwe klik.
+ * @param {{camera:number, preset:number, alt?:{camera:number,preset:number}}} a
+ * @returns {Promise<{mode:'direct'|'alt'|'zonder-take', live:number|null}>}
+ */
+async function goTo({ camera, preset, alt }) {
+  const my = ++goSeq;
+  const cam = camById(camera);
+  const take = config.brighteye.enabled && config.brighteye.host;
+  const t = config.timing || {};
+  const live = take ? await pgmSource() : null;
+  const useAlt = Boolean(take && alt && alt.camera !== cam.id && live === cam.id);
+  const failed = (e) => log({ dir: 'err', camera: cam.id, hex: '', text: e.message });
+  watcher.noteOwnMove(cam.id);
+  if (useAlt) {
+    const ac = camById(alt.camera);
+    log({ dir: 'info', camera: cam.id, hex: '', text: `${cam.name} staat al live: eerst ${ac.name} (preset ${alt.preset}) op PGM, daarna ${cam.name} (preset ${preset})` });
+    await Promise.all([
+      sendVisca(ac.id, visca.presetRecall(ac.viscaAddr, alt.preset)),
+      sendVisca(cam.id, visca.presetRecall(cam.viscaAddr, preset)),
+    ]);
+    (async () => {
+      await sleep(Number(t.takeDelayMs ?? 1500)); if (my !== goSeq) return;
+      await brighteyeTake(ac.id, 'pgm'); if (my !== goSeq) return;
+      await sleep(Number(t.altHoldMs ?? 4000)); if (my !== goSeq) return;
+      await brighteyeTake(cam.id, 'pgm');
+    })().catch(failed);
+    return { mode: 'alt', live };
+  }
+  await sendVisca(cam.id, visca.presetRecall(cam.viscaAddr, preset));
+  if (!take) return { mode: 'zonder-take', live };
+  if (live !== cam.id) {
+    (async () => {
+      await sleep(Number(t.takeDelayMs ?? 1500)); if (my !== goSeq) return;
+      await brighteyeTake(cam.id, 'pgm');
+    })().catch(failed);
+  }
+  return { mode: 'direct', live };
+}
+
+// ---------- Microposten-API (long polling) ----------
+let micKey = '';
+/** Herstart de poller alleen als de instellingen ervan veranderd zijn (anders onderbreekt elke bewaring de long poll). */
+function restartMicIfChanged() {
+  const k = JSON.stringify(config.micApi || {});
+  if (k === micKey) return;
+  micKey = k;
+  micPoller.restart();
+}
+/** Actieve microposten (nummers) volgens de API. @type {number[]} */
+let activeMics = [];
+const micPoller = createPoller({
+  getConfig: () => config.micApi || {},
+  onChange: (a) => { activeMics = a; broadcast('mics', { active: a }); },
+  log: (text, dir) => log({ dir, hex: '', text }),
+});
+
 /** Laatst opgehaalde release-info en pad van een gedownloade update. */
 let lastUpdate = null;
 /** @type {string|null} */
@@ -464,7 +554,7 @@ let downloadedUpdate = null;
  */
 const handlers = {
   'cfg:get': () => config,
-  'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); return true; },
+  'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); restartMicIfChanged(); return true; },
   'plan:get': () => loadPlan(),
   'plan:import': (_e, p) => importPlan(p),
   'plan:save': (_e, p) => savePlan(p),
@@ -490,6 +580,20 @@ const handlers = {
   },
 
   'program:switch': (_e, { camera, target }) => brighteyeTake(camera, target === 'pvw' ? 'pvw' : 'pgm'),
+  'seat:go': (_e, a) => goTo(a),
+  'cam:focus': (_e, { camera }) => sendVisca(camera, visca.focusTrigger(camById(camera).viscaAddr)),
+  'mic:state': () => ({ active: activeMics, running: micPoller.running }),
+  // Eén keer de microposten-API bevragen en het ruwe antwoord tonen (om de instelling te controleren).
+  'mic:test': async (_e, c) => {
+    const { parseHeaders, extractActive } = require('./mic-api');
+    if (!c || !c.url) throw new Error('Vul eerst de URL van de microposten-API in');
+    const res = await fetch(c.url, { headers: parseHeaders(c.headers), signal: AbortSignal.timeout(8000) });
+    const text = await res.text();
+    let active = null;
+    try { active = extractActive(JSON.parse(text), c); } catch { /* geen JSON */ }
+    log({ dir: res.ok ? 'info' : 'err', hex: '', text: `Microposten-API test: HTTP ${res.status}; actief = ${active ? (active.join(', ') || 'geen') : 'niet leesbaar (geen JSON)'} — ruw antwoord: ${text.replace(/\s+/g, ' ').slice(0, 400)}` });
+    return { status: res.status, active };
+  },
   // Preset uitproberen: preset oproepen op een camera en (optioneel) die camera naar PVW of PGM schakelen.
   'preset:try': async (_e, { camera, preset, target }) => {
     const n = Number(preset);
@@ -529,6 +633,7 @@ const handlers = {
     }
     const was = Boolean(config.debug);
     saveConfig(normalizeConfig(b.config));
+    restartMicIfChanged();
     store.writeWithBackup(planPath(), JSON.stringify(b.plan));
     applyDebug(was);
     return { config, plan: b.plan };
@@ -600,6 +705,7 @@ app.whenReady().then(() => {
     });
   }
   createWindow();
+  restartMicIfChanged();
   // Stille controle op een nieuwe versie (uitschakelbaar in de instellingen). Installeert nooit vanzelf.
   setTimeout(async () => {
     if (config.updateCheck === false) return;

@@ -38,6 +38,18 @@ contextBridge.exposeInMainWorld('api', {
   move: (camera, dir, speed) => call('cam:move', { camera, dir, speed }),
   /** Zoom starten of stoppen. @param {number} camera @param {'tele'|'wide'|'stop'} dir @param {number} [speed] 1-7 */
   zoom: (camera, dir, speed) => call('cam:zoom', { camera, dir, speed }),
+  /** Klik op een zetel: preset oproepen + naar PGM (met alternatief als dezelfde camera al live staat). @param {{camera:number,preset:number,alt?:object}} a */
+  seatGo: (a) => call('seat:go', a),
+  /** Autofocus één keer uitvoeren. @param {number} camera */
+  focus: (camera) => call('cam:focus', { camera }),
+  /** Actieve microposten volgens de API. */
+  micState: () => call('mic:state'),
+  /** Eén keer de microposten-API bevragen (ruw antwoord in het log). @param {object} c */
+  micTest: (c) => call('mic:test', c),
+  /** Camera op PGM gewijzigd. @param {(e:{camera:number|null})=>void} fn */
+  onPgm: (fn) => ipcRenderer.on('pgm', (_e, d) => fn(d)),
+  /** Actieve microposten gewijzigd. @param {(e:{active:number[]})=>void} fn */
+  onMics: (fn) => ipcRenderer.on('mics', (_e, d) => fn(d)),
   /** Debugmodus: laatst opgeroepen preset van een camera opvragen. @param {number} camera */
   lastPreset: (camera) => call('cam:lastPreset', { camera }),
   /** BrightEye: welke bron staat er op de programma-uitgang? (komt in het log) */

@@ -66,6 +66,7 @@ function describeCommand(b) {
     if ((b[4] & 0xf0) === 0x20) return 'Inzoomen';
     if ((b[4] & 0xf0) === 0x30) return 'Uitzoomen';
   }
+  if (b[1] === 0x01 && b[2] === 0x04 && b[3] === 0x18 && b[4] === 0x01) return 'Autofocus uitvoeren';
   if (b[1] === 0x09 && b[2] === 0x04 && b[3] === 0x00) return 'Vraag: staat de camera aan?';
   if (b[1] === 0x09 && b[2] === 0x04 && b[3] === 0x3f) return 'Vraag: laatst opgeroepen preset?';
   return '';

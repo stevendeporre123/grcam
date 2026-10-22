@@ -68,7 +68,27 @@
     {
       "id": "zaal2",
       "label": "Zaal 2"
+    },
+    {
+      "id": "zaal3",
+      "label": "Zaal 3"
+    },
+    {
+      "id": "zaal4",
+      "label": "Zaal 4"
     }
   ],
-  "assign": {}
+  "assign": {},
+  "timing": {
+    "takeDelayMs": 1500,
+    "altHoldMs": 4000
+  },
+  "micApi": {
+    "enabled": false,
+    "url": "",
+    "headers": "",
+    "activePath": "",
+    "idField": "",
+    "timeoutMs": 60000
+  }
 }

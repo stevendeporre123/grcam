@@ -121,4 +121,11 @@ const memoryInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x04, 0x3f, 0xff]);
  */
 const toHex = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join(' ');
 
-module.exports = { presetRecall, presetStore, home, panTilt, zoom, powerInquiry, memoryInquiry, toHex };
+/**
+ * Autofocus één keer laten uitvoeren (One Push AF Trigger: `8x 01 04 18 01 FF`).
+ * @param {number} a camera-adres 1-7
+ * @returns {Buffer}
+ */
+const focusTrigger = (a) => Buffer.from([hdr(a), 0x01, 0x04, 0x18, 0x01, 0xff]);
+
+module.exports = { focusTrigger, presetRecall, presetStore, home, panTilt, zoom, powerInquiry, memoryInquiry, toHex };

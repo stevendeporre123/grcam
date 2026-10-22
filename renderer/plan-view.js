@@ -77,11 +77,13 @@
     // Camera's als genummerde markering (positie in plan-coördinaten, net als de zetels).
     for (const c of opts.cameras ?? []) {
       if (!c.pos) continue;
-      const sel = c.id === opts.selCam ? ' sel' : '';
+      const sel = (c.id === opts.selCam ? ' sel' : '') + (c.id === opts.pgmCam ? ' pgm' : '');
       html += `<g class="cam${sel}" data-cam="${c.id}" transform="translate(${px(c.pos.x).toFixed(2)} ${py(c.pos.y).toFixed(2)})">` +
         `<title>${esc(c.name)}</title>` +
+        `<circle class="ring sel-ring" r="15" fill="none"/><circle class="ring pgm-ring" r="19" fill="none"/>` +
         `<circle r="10" fill="${camColor(c.id)}" stroke="#0b0d10" stroke-width="1.5"/>` +
-        `<text x="0" y="4.2" font-size="12" font-weight="700" text-anchor="middle" fill="#0b0d10">${c.id}</text></g>`;
+        `<text x="0" y="4.2" font-size="12" font-weight="700" text-anchor="middle" fill="#0b0d10">${c.id}</text>` +
+        `<text class="pgm-tag" x="0" y="-24" font-size="11" font-weight="800" text-anchor="middle">PGM</text></g>`;
     }
 
     // Kabinetvakken steken iets voorbij het kader uit: marge rechts (of links bij gedraaid zicht).
