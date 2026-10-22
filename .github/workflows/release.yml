@@ -19,6 +19,19 @@ jobs:
           node-version: 20
           cache: npm
 
+      # De versie van de .exe komt uit package.json. Die zetten we hier uit de tag (v0.2.0 -> 0.2.0);
+      # zonder tag (handmatige run) wordt het <basis>-dev.<runnummer>.
+      - name: Versie bepalen
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(node -p "require('./package.json').version.split('-')[0]")-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          npm version "$V" --no-git-tag-version --allow-same-version
+          echo "Versie: $V"
+
       - run: npm ci
       - run: npm test
       - run: npm run test:e2e
@@ -26,7 +39,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: PTZ-Backup-windows
+          name: PTZ-Backup-windows-${{ github.ref_name }}-${{ github.run_number }}
           path: dist/*.exe
 
       - name: GitHub Release
