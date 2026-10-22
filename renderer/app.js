@@ -165,7 +165,13 @@
   // Eén klik-handler op de SVG (event delegation): camera-markering of zetel
   $id('plan').addEventListener('click', (e) => {
     const cam = e.target.closest('.cam');
-    if (cam) { selectCamera(Number(cam.dataset.cam)); return; }
+    if (cam) {
+      const id = Number(cam.dataset.cam);
+      selectCamera(id);
+      // Klik op de camera op het plan = die camera ook naar de programma-uitgang (BrightEye), niet in inleermodus.
+      if (!learn && cfg.brighteye?.enabled) run(api.program(id)).then((r) => { if (r.ok) toast(`Camera ${id} naar programma`); });
+      return;
+    }
     const g = e.target.closest('.seat');
     // Niet-aanklikbare zetels (bv. pers) kan je enkel in inleermodus openen, om ze aanklikbaar te maken.
     if (g && (learn || !g.classList.contains('off'))) pick(g.dataset.id);
