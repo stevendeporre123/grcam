@@ -139,7 +139,7 @@ const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
   assert.ok(logs().some((l) => /Brighteye bevestigt: bestemming 0 staat nu op bron 1 \(Camera 2\)/.test(l.text)), JSON.stringify(logs()));
   events.length = 0;
   assert.ok((await call('program:status')).ok);
-  assert.ok(logs().some((l) => /Brighteye bereikbaar: .* bron 1 \(Camera 2\)/.test(l.text)));
+  assert.ok(logs().some((l) => /Brighteye: bestemming 0 staat op bron 1 \(Camera 2\)/.test(l.text)));
 
   // 4. Brighteye onbereikbaar: leesbare fout
   const bad = (await call('cfg:get')).data;
@@ -186,7 +186,7 @@ const logs = () => events.filter(([c]) => c === 'log').map(([, e]) => e);
   await sleep(1200);
   assert.strictEqual(logs().filter((l) => l.text === 'Camera is aan').length, 4);
   assert.strictEqual(logs().filter((l) => /^Laatst opgeroepen preset: \d+$/.test(l.text)).length, 4);
-  assert.ok(logs().some((l) => /Brighteye bereikbaar/.test(l.text)));
+  assert.ok(logs().some((l) => /Brighteye: bestemming 0 staat op bron/.test(l.text)));
   const hist = (await call('log:history')).data;
   assert.ok(Array.isArray(hist) && hist.length > 10);
   assert.ok(logEvents.some(([c]) => c === 'log'), 'het logvenster krijgt ook de regels');

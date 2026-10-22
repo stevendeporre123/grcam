@@ -436,15 +436,20 @@ async function brighteyeTake(camera) {
  * @returns {Promise<void>}
  */
 async function brighteyeStatus() {
-  const cmd = statusCommand(config.brighteye.dest);
-  const reply = await brighteyeExchange(cmd);
-  const st = parseStatus(reply)[0];
-  log({ dir: 'tx', hex: `brighteye: ${JSON.stringify(cmd)}`, text: 'Brighteye: welke bron staat er op de programma-uitgang?' });
-  log({
-    dir: 'rx', hex: `brighteye: ${JSON.stringify(reply)}`,
-    text: st ? `Brighteye bereikbaar: programma-uitgang (bestemming ${st.dest}) staat op bron ${st.src}${camOfSource(st.src)}`
-      : 'Brighteye bereikbaar (prompt ontvangen), maar gaf geen status terug',
-  });
+  // Alle bestemmingen 0-3 opvragen: zo zie je welke uitgang PGM is en welke preview. De ingestelde bestemming staat erbij.
+  const mine = Number(config.brighteye.dest) || 0;
+  for (let d = 0; d <= 3; d++) {
+    const cmd = statusCommand(d);
+    const reply = await brighteyeExchange(cmd);
+    const st = parseStatus(reply)[0];
+    const tag = d === mine ? ' ← hier schakelt de app naartoe (Instellingen → Bestemming)' : '';
+    log({ dir: 'tx', hex: `brighteye: ${JSON.stringify(cmd)}`, text: `Brighteye: welke bron staat er op bestemming ${d}?` });
+    log({
+      dir: 'rx', hex: `brighteye: ${JSON.stringify(reply)}`,
+      text: st ? `Brighteye: bestemming ${d} staat op bron ${st.src}${camOfSource(st.src)}${tag}`
+        : `Brighteye: bestemming ${d} gaf geen status terug (bestaat waarschijnlijk niet)${tag}`,
+    });
+  }
 }
 
 /** Laatst opgehaalde release-info en pad van een gedownloade update. */
