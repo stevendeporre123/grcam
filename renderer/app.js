@@ -552,17 +552,18 @@
     table = new DataTable('#map', {
       data: rowsData(),
       pageLength: 25,
+      autoWidth: false,
       order: [[3, 'asc']],
       language: { search: 'Zoeken:', lengthMenu: '_MENU_ per pagina', info: '_START_–_END_ van _TOTAL_', zeroRecords: 'Geen resultaten' },
       columns: [
-        { title: 'Naam', data: 'naam', render: (d) => esc(d) },
-        { title: 'Fractie', data: 'fractie', render: (d) => esc(d) },
-        { title: 'Micropost', data: 'mic', defaultContent: '', width: '80px', render: (d) => d ?? '' },
+        { title: 'Naam', data: 'naam', width: '26%', render: (d) => esc(d) },
+        { title: 'Fractie', data: 'fractie', width: '18%', render: (d) => esc(d) },
+        { title: 'Micropost', data: 'mic', defaultContent: '', width: '11%', render: (d) => d ?? '' },
         // Niet-gekoppelde rijen sorteren achteraan (99)
-        { title: 'Camera', data: 'camera', defaultContent: '', render: (d, t) => (d ? (t === 'display' ? esc(camName(d)) : d) : (t === 'display' ? '<span class="mute">niet gekoppeld</span>' : 99)) },
-        { title: 'Preset', data: 'preset', defaultContent: '', width: '70px', render: (d) => d ?? '' },
+        { title: 'Camera', data: 'camera', defaultContent: '', width: '14%', render: (d, t) => (d ? (t === 'display' ? esc(camName(d)) : d) : (t === 'display' ? '<span class="mute">niet gekoppeld</span>' : 99)) },
+        { title: 'Preset', data: 'preset', defaultContent: '', width: '8%', render: (d) => d ?? '' },
         {
-          title: '', data: null, orderable: false, searchable: false, width: '200px',
+          title: '', data: null, orderable: false, searchable: false, width: '23%', className: 'acts',
           render: (_d, _t, row) => `<button data-act="go" data-id="${esc(row.id)}" ${row.camera ? '' : 'disabled'}>Oproepen</button><button data-act="edit" data-id="${esc(row.id)}">Bewerken</button>`,
         },
       ],
@@ -805,6 +806,11 @@
   $id('ptPvw').addEventListener('click', () => presetTry('pvw'));
   $id('ptPgm').addEventListener('click', () => presetTry('pgm'));
   $id('btnLogWin').addEventListener('click', () => run(api.openLogWindow()));
+  // Hulpmiddelen: zwevend (niet-modaal) venster zodat het log en de rest zichtbaar blijven
+  const openTools = () => { const d = $id('dlgTools'); if (!d.open) d.show(); };
+  $id('btnTools').addEventListener('click', openTools);
+  $id('btnTools2').addEventListener('click', openTools);
+  $id('toolsClose').addEventListener('click', () => $id('dlgTools').close());
 
   // De debugstand kan ook in het logvenster gewijzigd worden.
   api.onDebugChanged((on) => { cfg.debug = on; $id('debugSw').checked = on; if (!on) banner.hidden = true; });

@@ -55,6 +55,7 @@
           <button id="btnUpdateCheck">Controleer op updates</button>
           <button id="btnBackup" title="Alle instellingen, koppelingen en het zittingsplan opslaan in een bestand">Back-up maken</button>
           <button id="btnRestore">Back-up terugzetten…</button>
+          <button id="btnTools2" title="Preset uitproberen, camera's testen, debugmodus">Hulpmiddelen…</button>
           <button id="btnSettings">Instellingen</button>
           <input type="file" id="backupFile" accept="application/json,.json" hidden>
           <input type="file" id="planFile" accept="application/json,.json" hidden>
@@ -63,22 +64,36 @@
       <table id="map" class="display" style="width:100%"></table>
     </section>
     <section class="panel">
-      <h2>Preset uitproberen</h2>
-      <div class="panel-head"><span class="mute">Roep een preset op een camera op en kijk welke zitplaats dat is. Preview is veilig; PGM is live.</span>
-        <label>Camera <select id="ptCam"></select></label>
-        <label>Preset <input id="ptNum" type="number" min="0" max="254" value="1" style="width:5em"></label>
-        <button id="ptOnly">Alleen oproepen</button>
-        <button id="ptPvw">Oproepen + naar PVW</button>
-        <button id="ptPgm">Oproepen + naar PGM</button></div>
-    </section>
-    <section class="panel">
       <h2>Verkeer</h2>
-      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><label class="dbg" title="Houdt de IPL-verbindingen open en stuurt na elk camera-antwoord een extra vraag naar de camera. Let op: dit verkeer ziet ook de NI-700; zet het niet aan tijdens een zitting."><input type="checkbox" id="debugSw"> Debug: laatste preset tonen</label><button id="btnLogWin" title="Het log in een eigen venster, bv. op een tweede scherm">Log in apart venster</button><button id="btnPing">Test alle camera's</button></div>
+      <div class="panel-head"><span class="mute">TX/RX naar de IPL T S6 in hex</span><div class="btnrow"><button id="btnTools" title="Preset uitproberen, camera's testen, debugmodus">Hulpmiddelen…</button><button id="btnLogWin" title="Het log in een eigen venster, bv. op een tweede scherm">Log in apart venster</button></div></div>
       <pre id="log"></pre>
     </section>
   </main>
 
   <div id="toast" role="status"></div>
+
+  <dialog id="dlgTools" class="floating tools">
+    <h3>Hulpmiddelen</h3>
+    <section>
+      <h4>Preset uitproberen</h4>
+      <p class="hint">Roep een preset op een camera op en kijk welke zitplaats dat is. Preview is veilig; PGM is live.</p>
+      <div class="toolrow">
+        <label>Camera <select id="ptCam"></select></label>
+        <label>Preset <input id="ptNum" type="number" min="0" max="254" value="1"></label>
+      </div>
+      <div class="btnrow">
+        <button id="ptOnly">Alleen oproepen</button>
+        <button id="ptPvw">Oproepen + naar PVW</button>
+        <button id="ptPgm">Oproepen + naar PGM</button>
+      </div>
+    </section>
+    <section>
+      <h4>Camera's testen</h4>
+      <div class="btnrow"><button id="btnPing">Test alle camera's</button></div>
+      <label class="dbg chk" title="Houdt de IPL-verbindingen open en stuurt na elk camera-antwoord een extra vraag naar de camera. Let op: dit verkeer ziet ook de NI-700; zet het niet aan tijdens een zitting."><input type="checkbox" id="debugSw"> Debug: laatste preset tonen (niet tijdens een zitting)</label>
+    </section>
+    <menu><button type="button" id="toolsClose">Sluiten</button></menu>
+  </dialog>
 
   <dialog id="dlgAssign">
     <form id="formAssign" method="dialog">
