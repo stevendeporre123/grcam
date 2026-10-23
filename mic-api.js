@@ -9,7 +9,9 @@
  *     (`{"Notification":"Error 408"}`); daarna meteen opnieuw vragen (binnen 60 s, anders vergeet de server ons).
  *     Een sessie zonder poll gedurende 180 s vervalt (`Error 400`): dan opnieuw verbinden.
  *  3. Gebeurtenis `{"MicrophoneState":{"Speakers":[1,5],"Requests":[7],"Replies":[]}}`: de getallen zijn zetelnummers
- *     (SeatNr); dat is het micropostnummer dat bij een zetel is ingevuld.
+ *     (SeatNr); dat is het micropostnummer dat bij een zetel is ingevuld. Alleen `Speakers` (aan) gebruiken we.
+ *  5. Bedienen: `Microphone/SetState/?State=Off&SeatNr=n` (één micro uit) en
+ *     `Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests` (alle micro's uit, ook de voorzitter).
  *  4. Bij het verbinden vragen we de huidige stand op (`GET /CoCon/Microphone/GetState`) en schrijven we ons uit van
  *     de andere modellen (Room, Voting, ...) zodat de server ons enkel de microfoongebeurtenissen stuurt.
  * Standaardpoort volgens de handleiding: 8990 (voorbeelden in het document gebruiken 8890); instelbaar.
@@ -30,14 +32,14 @@ function arrayOf(text, name) {
 /**
  * Leest de microfoonstand uit een antwoord (gebeurtenis `MicrophoneState` of antwoord op `Microphone/GetState`).
  * @param {string} text ruw antwoord
- * @returns {{active:number[], requests:number[]}|null} null als het antwoord geen microfoonstand bevat
+ * @returns {{active:number[]}|null} null als het antwoord geen microfoonstand bevat
  */
 function parseMicState(text) {
   const s = String(text);
   const speakers = arrayOf(s, 'Speakers');
   if (speakers === null) return null;
   const sort = (a) => [...new Set(a)].sort((x, y) => x - y);
-  return { active: sort(speakers), requests: sort(arrayOf(s, 'Requests') || []) };
+  return { active: sort(speakers) }; // aanvragen (Requests) gebruiken we niet
 }
 
 /** Basisadres van de API. @param {{host:string, port?:number}} c */
@@ -59,7 +61,7 @@ async function getText(fetchImpl, url, timeoutMs) {
  * Maakt een sessie, vraagt de stand op en sluit de sessie weer (voor de testknop).
  * @param {{host:string, port?:number}} c
  * @param {typeof fetch} [fetchImpl]
- * @returns {Promise<{state:{active:number[],requests:number[]}|null, connect:string, stateText:string}>}
+ * @returns {Promise<{state:{active:number[]}|null, connect:string, stateText:string}>}
  */
 async function probe(c, fetchImpl = fetch) {
   const base = baseUrl(c);
@@ -78,7 +80,7 @@ async function probe(c, fetchImpl = fetch) {
  * Maakt de poller (één sessie, één long poll tegelijk).
  * @param {object} o
  * @param {() => {enabled:boolean, host:string, port?:number}} o.getConfig
- * @param {(state:{active:number[], requests:number[]}) => void} o.onChange  alleen bij een wijziging
+ * @param {(state:{active:number[]}) => void} o.onChange  alleen bij een wijziging
  * @param {(msg:string, level:'info'|'err') => void} o.log
  * @param {typeof fetch} [o.fetchImpl]
  * @param {number} [o.pollTimeoutMs=45000]  iets langer dan de 30 s van de server
@@ -93,10 +95,10 @@ function createPoller({ getConfig, onChange, log, fetchImpl = fetch, pollTimeout
   let errLogged = false;
 
   const emit = (st) => {
-    const key = `${st.active.join(',')}|${st.requests.join(',')}`;
+    const key = st.active.join(',');
     if (key === last) return;
     last = key;
-    log(`Microposten: aan = ${st.active.length ? st.active.join(', ') : 'geen'}; aanvraag = ${st.requests.length ? st.requests.join(', ') : 'geen'}`, 'info');
+    log(`Microposten aan: ${st.active.length ? st.active.join(', ') : 'geen'}`, 'info');
     onChange(st);
   };
 
@@ -158,10 +160,35 @@ function createPoller({ getConfig, onChange, log, fetchImpl = fetch, pollTimeout
     stop() {
       running = false; gen++;
       disconnect();
-      if (last !== null) { last = null; onChange({ active: [], requests: [] }); }
+      if (last !== null) { last = null; onChange({ active: [] }); }
     },
     get running() { return running; },
   };
 }
 
-module.exports = { parseMicState, probe, createPoller, baseUrl };
+/**
+ * Stuurt een opdracht naar de CoCon API; die antwoordt met 0 (gelukt), 1 (ongeldige waarde) of -1 (fout).
+ * @param {{host:string, port?:number}} c
+ * @param {string} path bv. `Microphone/SetState/?State=Off&SeatNr=3`
+ * @param {typeof fetch} [fetchImpl]
+ * @returns {Promise<void>}
+ * @throws {Error} met een leesbare melding
+ */
+async function command(c, path, fetchImpl = fetch) {
+  const text = (await getText(fetchImpl, `${baseUrl(c)}/${path}`, 8000)).trim();
+  if (/^"?0"?$/.test(text)) return;
+  if (/^"?1"?$/.test(text)) throw new Error('CoCon weigerde de opdracht (ongeldige waarde, bv. een onbestaand zetelnummer)');
+  if (/^"?-1"?$/.test(text)) throw new Error('CoCon meldt een fout bij het uitvoeren van de opdracht (zie het CoCon-serverlog)');
+  throw new Error(`Onverwacht antwoord van CoCon: ${text.slice(0, 120)}`);
+}
+
+/** Eén micropost (zetelnummer) uitschakelen. */
+const micOff = (c, seat, fetchImpl) => {
+  const n = Number(seat);
+  if (!Number.isInteger(n) || n < 1) return Promise.reject(new Error('Ongeldig micropostnummer'));
+  return command(c, `Microphone/SetState/?State=Off&SeatNr=${n}`, fetchImpl);
+};
+/** Alle microposten uitschakelen (inclusief voorzitter en aanvragen). */
+const micMuteAll = (c, fetchImpl) => command(c, 'Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests', fetchImpl);
+
+module.exports = { parseMicState, probe, createPoller, baseUrl, command, micOff, micMuteAll };

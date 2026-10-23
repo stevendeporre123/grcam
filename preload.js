@@ -46,6 +46,10 @@ contextBridge.exposeInMainWorld('api', {
   micState: () => call('mic:state'),
   /** Eén keer de microposten-API bevragen (ruw antwoord in het log). @param {object} c */
   micTest: (c) => call('mic:test', c),
+  /** Eén micropost (zetelnummer) uitschakelen. @param {number} seat */
+  micOff: (seat) => call('mic:off', { seat }),
+  /** Alle microposten uitschakelen. */
+  micMuteAll: () => call('mic:muteAll'),
   /** Camera op PGM gewijzigd. @param {(e:{camera:number|null})=>void} fn */
   onPgm: (fn) => ipcRenderer.on('pgm', (_e, d) => fn(d)),
   /** Actieve microposten gewijzigd. @param {(e:{active:number[]})=>void} fn */

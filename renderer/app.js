@@ -41,7 +41,6 @@
   /** Camera die nu op PGM staat (melding van het main-proces) en actieve microposten (API). */
   let pgmCam = null;
   let micActive = [];
-  let micReq = [];
   /** Zetel- of zaal-id dat in de inleer-modal bewerkt wordt. */
   let editingId = null;
   /** Spiegelgegevens van de laatst getekende plan (voor het slepen van camera's). */
@@ -146,29 +145,35 @@
     document.querySelectorAll('#camSel button').forEach((b) => b.classList.toggle('pgm', pgmCam !== null && Number(b.dataset.cam) === pgmCam));
   }
 
-  /** Markeert zetels waarvan de micropost aan staat (rood) of in aanvraag is (geel) en toont de namen boven het plan. */
+  /** Markeert zetels waarvan de micropost aan staat (rood). Boven het plan staan de namen met een uit-knop per micro en "Alle micro's uit". */
   function markMics() {
     const on = new Set(micActive);
-    const rq = new Set(micReq);
-    const names = []; const asking = [];
+    const items = [];
     document.querySelectorAll('#plan .seat').forEach((g) => {
       const s = seatOf(g.dataset.id);
       const hit = Boolean(s && s.mic != null && on.has(s.mic));
-      const ask = Boolean(s && s.mic != null && rq.has(s.mic)) && !hit;
       g.classList.toggle('mic-on', hit);
-      g.classList.toggle('mic-req', ask);
-      if (hit) names.push(`${s.naam} (mic ${s.mic})`);
-      if (ask) asking.push(`${s.naam} (mic ${s.mic})`);
+      if (hit) items.push({ mic: s.mic, text: `${s.naam} (mic ${s.mic})` });
     });
-    const known = (m) => plan.seats.some((s) => s.mic === m);
-    for (const m of micActive) if (!known(m)) names.push(`onbekende micropost ${m}`);
+    for (const m of micActive) if (!plan.seats.some((s) => s.mic === m)) items.push({ mic: m, text: `onbekende micropost ${m}` });
     const el = $id('micInfo');
-    const parts = [];
-    if (names.length) parts.push(`Micropost aan: ${names.join(', ')}`);
-    if (asking.length) parts.push(`Aanvraag: ${asking.join(', ')}`);
-    el.hidden = !parts.length;
-    el.textContent = parts.join(' — ');
+    const enabled = Boolean(cfg.micApi?.enabled && cfg.micApi?.host);
+    el.hidden = !enabled;
+    el.classList.toggle('quiet', !items.length);
+    el.innerHTML = '<span class="mi-text">' + (items.length ? 'Micropost aan:' : 'Geen micropost aan') + '</span>' +
+      items.map((i) => `<span class="mi-chip">${esc(i.text)} <button data-micoff="${i.mic}" title="Deze micro uitschakelen">uit</button></span>`).join('') +
+      '<button id="btnMuteAll" class="mi-all" title="Alle microposten uitschakelen">Alle micro\'s uit</button>';
   }
+
+  $id('micInfo').addEventListener('click', async (e) => {
+    const off = e.target.closest('[data-micoff]');
+    if (off) { const r = await run(api.micOff(Number(off.dataset.micoff))); if (r.ok) toast(`Micropost ${off.dataset.micoff} uitgeschakeld`); return; }
+    if (e.target.closest('#btnMuteAll')) {
+      if (!confirm('Alle microposten uitschakelen (ook de voorzitter)?')) return;
+      const r = await run(api.micMuteAll());
+      if (r.ok) toast('Alle microposten uitgeschakeld');
+    }
+  });
 
   /** Tekent de zaalknoppen; de randkleur toont de gekoppelde camera. */
   function renderZaal() {
@@ -754,7 +759,7 @@
 
   // Camera op PGM en actieve microposten komen uit het main-proces
   api.onPgm((d) => { pgmCam = d.camera ?? null; renderCamSel(); markCams(); });
-  api.onMics((d) => { micActive = d.active || []; micReq = d.requests || []; markMics(); });
+  api.onMics((d) => { micActive = d.active || []; markMics(); });
 
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
   // Test alle camera's; de volledige test (met debug ook de laatste preset, plus Brighteye) loopt in het main-proces.
@@ -811,7 +816,7 @@
     cfg = (await api.getConfig()).data;
     plan = (await api.getPlan()).data;
     buildPad();
-    { const s = (await api.micState()).data || {}; micActive = s.active || []; micReq = s.requests || []; }
+    micActive = (await api.micState()).data?.active || [];
     renderAll();
     initTable();
     refreshTable();

@@ -181,6 +181,7 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
 
   // 3e. Microposten (CoCon API, long polling) -> 'mics'-event
   let polls = 0;
+  const micCalls = [];
   const micSrv = http.createServer((req, res) => {
     const send = (b) => res.end(typeof b === 'string' ? b : JSON.stringify(b));
     if (req.url === '/CoCon/Connect') return send({ Connect: true, id: 'abc' });
@@ -189,6 +190,7 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
       return setTimeout(() => (polls++ < 1 ? send({ MicrophoneState: { Speakers: [12], Requests: [5], Replies: [] } })
         : polls++ < 3 ? send({ MicrophoneState: { Speakers: [12, 30], Requests: [], Replies: [] } }) : null), 30);
     }
+    micCalls.push(req.url);
     send('0');
   }).listen(0, '127.0.0.1');
   await new Promise((r) => micSrv.on('listening', r));
@@ -196,9 +198,12 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   mc.micApi = { enabled: true, host: '127.0.0.1', port: micSrv.address().port };
   assert.ok((await call('cfg:save', mc)).ok);
   await sleep(1500);
-  const mics = events.filter(([c]) => c === 'mics').map(([, d]) => `${d.active}|${d.requests}`);
-  assert.deepStrictEqual(mics.slice(0, 3), ['|', '12|5', '12,30|'], JSON.stringify(mics));
+  const mics = events.filter(([c]) => c === 'mics').map(([, d]) => d.active.join(','));
+  assert.deepStrictEqual(mics.slice(0, 3), ['', '12', '12,30'], JSON.stringify(mics));
   assert.deepStrictEqual((await call('mic:state')).data.active, [12, 30]);
+  assert.ok((await call('mic:off', { seat: 12 })).ok);
+  assert.ok((await call('mic:muteAll')).ok);
+  assert.ok(micCalls.includes('/CoCon/Microphone/SetState/?State=Off&SeatNr=12') && micCalls.includes('/CoCon/Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests'), JSON.stringify(micCalls));
   const mt = await call('mic:test', { host: '127.0.0.1', port: micSrv.address().port });
   assert.ok(mt.ok && Array.isArray(mt.data.active), JSON.stringify(mt));
   mc.micApi.enabled = false;
