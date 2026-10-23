@@ -127,3 +127,11 @@ dialog.tools section { border:1px solid var(--line); border-radius:8px; padding:
 dialog.tools h4 { margin:0 0 6px; }
 .toolrow { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
+
+.thumbs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; width:100%; }
+.thumbs .th { width:150px; text-align:center; font-size:12px; color:var(--mute, #9aa); }
+.thumbs .th img, .thumbs .th .ph { width:150px; aspect-ratio:16/9; object-fit:cover; background:#111; border:2px solid #333; border-radius:4px; display:block; }
+.thumbs .th.pgm img, .thumbs .th.pgm .ph { border-color:#e53935; }
+.thumbs .th.live img { border-color:#e53935; }
+.thumbone { display:flex; align-items:center; gap:8px; margin:4px 0; }
+.thumbone img { width:160px; aspect-ratio:16/9; object-fit:cover; border:2px solid #333; border-radius:4px; }

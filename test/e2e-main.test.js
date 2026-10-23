@@ -179,6 +179,26 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok((await call('cam:focus', { camera: 2 })).ok);
   assert.ok(logs().some((l) => l.dir === 'tx' && l.text === 'Autofocus uitvoeren'));
 
+  // 3d2. Miniaturen via de webinterface van de BrightEye (poort 8080 in het echt)
+  const thumbUrls = [];
+  const thSrv = http.createServer((req, res) => {
+    thumbUrls.push(req.url);
+    res.setHeader('content-type', 'image/jpeg');
+    res.end(Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+  }).listen(0, '127.0.0.1');
+  await new Promise((r) => thSrv.on('listening', r));
+  const tc = (await call('cfg:get')).data;
+  tc.brighteye.thumbs = { enabled: true, port: thSrv.address().port, intervalMs: 3000, cpguid: 'abc-guid' };
+  assert.ok((await call('cfg:save', tc)).ok);
+  const th1 = await call('thumb:get', { camera: 1 });
+  assert.ok(th1.ok && th1.data.image.startsWith('data:image/jpeg;base64,'), JSON.stringify(th1));
+  assert.ok(/^\/api\/\?cmd=2&mcmd=10&src=\d+&cpguid=abc-guid&expire=\d+$/.test(thumbUrls[0]), thumbUrls[0]);
+  const thp = await call('thumb:get', { camera: 'pgm' });
+  assert.ok(thp.ok && thp.data.src === 5, JSON.stringify(thp));
+  assert.ok(/src=5&/.test(thumbUrls[thumbUrls.length - 1]), thumbUrls[thumbUrls.length - 1]);
+  assert.ok(!(await call('thumb:get', { camera: 99 })).ok);
+  thSrv.close();
+
   // 3e. Microposten (CoCon API, long polling) -> 'mics'-event
   let polls = 0;
   const micCalls = [];
