@@ -11,13 +11,12 @@
     "dist": "electron-builder --win portable --publish never"
   },
   "dependencies": {
-    "datatables.net": "^2.1.8",
-    "datatables.net-dt": "^2.1.8",
-    "jquery": "^3.7.1"
+    "datatables.net": "^3.1.4",
+    "datatables.net-dt": "^3.1.4"
   },
   "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8"
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "be.smartergrp.ptzbackup",
@@ -26,11 +25,16 @@
       "main.js",
       "preload.js",
       "visca.js",
-      "brighteye.js", "host.js", "debug-watch.js", "visca-decode.js", "data-store.js", "updater.js", "mic-api.js",
+      "brighteye.js",
+      "host.js",
+      "debug-watch.js",
+      "visca-decode.js",
+      "data-store.js",
+      "updater.js",
+      "mic-api.js",
       "config.default.json",
       "plan.default.json",
       "renderer/**",
-      "node_modules/jquery/dist/jquery.min.js",
       "node_modules/datatables.net/js/dataTables.min.js",
       "node_modules/datatables.net-dt/css/dataTables.dataTables.min.css",
       "node_modules/datatables.net-dt/images/**"
