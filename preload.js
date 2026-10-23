@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld('api', {
   /** Voortgang van de download (0-100). @param {(p:{percent:number})=>void} fn */
   onUpdateProgress: (fn) => ipcRenderer.on('update:progress', (_e, p) => fn(p)),
   /** Camera naar de programma-uitgang van de BrightEye schakelen. @param {number} camera */
+  /** Miniatuur van een camera of 'pgm' (data-URL). */
+  thumb: (camera) => call('thumb:get', { camera }),
   program: (camera, target) => call('program:switch', { camera, target }),
   /** Preset uitproberen: oproepen en optioneel naar 'pvw' of 'pgm'. */
   presetTry: (camera, preset, target) => call('preset:try', { camera, preset, target }),

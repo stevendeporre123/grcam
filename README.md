@@ -112,3 +112,10 @@ Instellingen → Microposten: IP-adres van de CoCon-server (of Plixus Core) en d
 ## Versies van de bouwstenen
 
 Electron 45, electron-builder 26, DataTables 3 (zonder jQuery; die afhankelijkheid is verwijderd) en de GitHub-acties checkout/setup-node/upload-artifact v7 en action-gh-release v3. Gebouwd en getest op Node 22 (Electron 45 vraagt Node 22.12 of hoger).
+
+## Miniaturen (BrightEye)
+
+Onder het zaalplan toont de app de miniaturen van de 4 camera's en van PGM. Ze komen van de webinterface van de BrightEye
+(`http://<host>:8080/api/?cmd=2&mcmd=10&src=<bron>&expire=…`, geen login) en worden door het hoofdproces opgehaald.
+Dezelfde miniatuur staat in Hulpmiddelen → Preset uitproberen en in het koppelvenster van een plaats (ververst na "Oproepen" en na opslaan).
+Instellingen: Beheer → Instellingen (aan/uit, poort, interval, optionele `cpguid`). PGM volgt de bron die op de programma-uitgang staat.

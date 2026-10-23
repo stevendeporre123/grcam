@@ -374,6 +374,7 @@
     f.altPreset.value = a?.alt?.preset ?? '';
     document.querySelectorAll('.seat.pending').forEach((e) => e.classList.remove('pending'));
     document.querySelector(`.seat[data-id="${CSS.escape(id)}"]`)?.classList.add('pending');
+    thumbInto($id('asThumb'), $id('asThumbMsg'), Number(f.camera.value));
     selectCamera(Number(f.camera.value)); // de joystick rechts bestuurt meteen de camera van deze plaats
     const dlg = $id('dlgAssign');
     if (dlg.open) return; // in inleermodus blijft het venster openstaan; we hebben enkel de velden herladen
@@ -427,12 +428,14 @@
     if (f.preset.value === '') { toast('Vul een presetnummer in'); return; }
     selectCamera(Number(f.camera.value));
     run(api.preset(Number(f.camera.value), Number(f.preset.value)));
+    thumbSoon($id('asThumb'), $id('asThumbMsg'), () => Number(f.camera.value));
   });
   $id('aAltGo').addEventListener('click', () => {
     const f = $id('formAssign');
     if (f.altCamera.value === '' || f.altPreset.value === '') { toast('Kies eerst een alternatieve camera en preset'); return; }
     selectCamera(Number(f.altCamera.value));
     run(api.preset(Number(f.altCamera.value), Number(f.altPreset.value)));
+    const ac = Number(f.altCamera.value); thumbSoon($id('asThumb'), $id('asThumbMsg'), () => ac);
   });
   // "Alternatief opslaan in camera": huidige positie van de alternatieve camera bewaren onder het alternatieve presetnummer
   $id('aAltStore').addEventListener('click', async () => {
@@ -499,6 +502,7 @@
     }
     closeAssign();
     await persist();
+    thumbSoon($id('ptThumb'), $id('ptThumbMsg'), () => a.camera);
   });
 
   // ---------- PTZ ----------
@@ -654,6 +658,8 @@
     const m = cfg.micApi || {};
     f.mEnabled.checked = !!m.enabled; f.mHost.value = m.host || ''; f.mPort.value = m.port || 8890;
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
+    const th = cfg.brighteye.thumbs || {};
+    f.thEnabled.checked = th.enabled !== false; f.thPort.value = th.port || 8080; f.thMs.value = th.intervalMs || 3000; f.thGuid.value = th.cpguid || '';
     $id('dlgSettings').showModal();
   });
   $id('setCancel').addEventListener('click', () => $id('dlgSettings').close());
@@ -665,6 +671,7 @@
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
+    cfg.brighteye.thumbs = { enabled: f.thEnabled.checked, port: Number(f.thPort.value) || 8080, intervalMs: Math.max(1000, Number(f.thMs.value) || 3000), cpguid: f.thGuid.value.trim() };
     cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
     cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 };
     await persist();
@@ -787,6 +794,55 @@
   // Test alle camera's; de volledige test (met debug ook de laatste preset, plus Brighteye) loopt in het main-proces.
   $id('btnPing').addEventListener('click', () => run(api.testAll()));
 
+  // ---------- Miniaturen (BrightEye) ----------
+  /** Haalt een miniatuur op en zet die in een <img>; toont de fout in `msgEl`. */
+  async function thumbInto(img, msgEl, camera) {
+    if (!cfg.brighteye?.enabled || cfg.brighteye.thumbs?.enabled === false) { img.hidden = true; if (msgEl) msgEl.textContent = ''; return; }
+    const r = await api.thumb(camera);
+    if (r.ok) { img.src = r.data.image; img.hidden = false; if (msgEl) msgEl.textContent = ''; }
+    else { img.hidden = true; if (msgEl) msgEl.textContent = r.error; }
+  }
+  const thumbSoon = (img, msgEl, camGetter, ms = 1800) => setTimeout(() => thumbInto(img, msgEl, camGetter()), ms);
+  let thumbTimer = null;
+  let thumbBusy = false;
+  /** Bouwt de strook met 4 camera's en PGM onder het plan en ververst die met een vast interval. */
+  let thumbSig = '';
+  function renderThumbs() {
+    const box = $id('thumbs');
+    const t = cfg.brighteye?.thumbs;
+    const sig = JSON.stringify([cfg.brighteye?.enabled, cfg.brighteye?.host, t, cfg.cameras.map((c) => [c.id, c.name, c.beSource])]);
+    if (sig === thumbSig) return; // niets gewijzigd: de lopende verversing blijft
+    thumbSig = sig;
+    clearInterval(thumbTimer);
+    const on = cfg.brighteye?.enabled && cfg.brighteye.host && t?.enabled !== false;
+    box.hidden = !on;
+    if (!on) return;
+    box.innerHTML = [...cfg.cameras.map((c) => ({ id: c.id, t: c.name })), { id: 'pgm', t: 'PGM' }]
+      .map((o) => `<div class="th ${o.id === 'pgm' ? 'pgm' : ''}" data-th="${o.id}"><div class="ph"></div><span>${esc(o.t)}</span></div>`).join('');
+    const tick = async () => {
+      if (thumbBusy || document.hidden) return;
+      thumbBusy = true;
+      try {
+        await Promise.all([...box.querySelectorAll('.th')].map(async (el) => {
+          const id = el.dataset.th === 'pgm' ? 'pgm' : Number(el.dataset.th);
+          const r = await api.thumb(id);
+          const ph = el.querySelector('.ph, img');
+          if (r.ok) {
+            if (ph.tagName !== 'IMG') { const im = document.createElement('img'); im.alt = ''; ph.replaceWith(im); }
+            el.querySelector('img').src = r.data.image;
+            el.title = '';
+            if (id === 'pgm') el.querySelector('span').textContent = `PGM: ${camName(r.data.camera)}`;
+          } else { el.title = r.error; }
+        }));
+      } finally { thumbBusy = false; }
+    };
+    tick();
+    thumbTimer = setInterval(tick, Math.max(1000, Number(t.intervalMs) || 3000));
+  }
+  // Miniatuur in de preset-tool en in de koppelmodal
+  $id('ptCam').addEventListener('change', () => thumbInto($id('ptThumb'), $id('ptThumbMsg'), Number($id('ptCam').value)));
+  $id('formAssign').camera.addEventListener('change', () => thumbInto($id('asThumb'), $id('asThumbMsg'), Number($id('formAssign').camera.value)));
+
   // ---------- Preset uitproberen ----------
   function fillPresetTry() {
     const sel = $id('ptCam');
@@ -828,7 +884,7 @@
     if (target && !cfg.brighteye?.enabled) { toast('Zet eerst de Brighteye-koppeling aan (Beheer → Instellingen)'); return; }
     if (target === 'pgm' && !confirm(`Preset ${preset} oproepen op camera ${camera} en die camera LIVE op PGM zetten?`)) return;
     const r = await run(api.presetTry(camera, preset, target));
-    if (r.ok) toast(`Camera ${camera}: preset ${preset} opgeroepen${target ? ` en naar ${target.toUpperCase()}` : ''}`);
+    if (r.ok) { toast(`Camera ${camera}: preset ${preset} opgeroepen${target ? ` en naar ${target.toUpperCase()}` : ''}`); thumbSoon($id('ptThumb'), $id('ptThumbMsg'), () => camera); }
   }
   $id('ptOnly').addEventListener('click', () => presetTry(null));
   $id('ptPvw').addEventListener('click', () => presetTry('pvw'));
@@ -859,7 +915,7 @@
     renderPlan();
     renderZaal();
     renderCamSel();
-    renderProgram(); fillPresetTry(); fillPresetSeats();
+    renderProgram(); fillPresetTry(); fillPresetSeats(); renderThumbs();
     markActive();
     $id('debugSw').checked = Boolean(cfg.debug);
     if (!cfg.debug) banner.hidden = true;

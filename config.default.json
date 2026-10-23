@@ -55,7 +55,8 @@
     "host": "",
     "port": 5200,
     "dest": 1,
-    "pvwDest": 0
+    "pvwDest": 0,
+    "thumbs": { "enabled": true, "port": 8080, "intervalMs": 3000, "cpguid": "" }
   },
   "debug": false,
   "updateCheck": true,

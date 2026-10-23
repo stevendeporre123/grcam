@@ -26,7 +26,7 @@
   <div id="learnBanner" hidden>INLEREN: klik een zetel of zaalknop om een camerapositie te koppelen. Bestaande camerapresets kunnen overschreven worden. Sleep een cameranummer op het plan naar de juiste plaats.</div>
 
   <main id="viewOp" class="op">
-    <div class="planwrap"><div id="micInfo" class="micinfo" hidden></div><div id="lastPreset" hidden></div><svg id="plan" role="img" aria-label="Zittingsplan gemeenteraadszaal"></svg></div>
+    <div class="planwrap"><div id="micInfo" class="micinfo" hidden></div><div id="lastPreset" hidden></div><svg id="plan" role="img" aria-label="Zittingsplan gemeenteraadszaal"></svg><div id="thumbs" class="thumbs" hidden></div></div>
     <aside class="side">
       <div id="now" class="now">Kies een spreker in het plan</div>
       <div class="group-title">Zaal</div>
@@ -86,6 +86,7 @@
         <button id="ptPvw">Oproepen + naar PVW</button>
         <button id="ptPgm">Oproepen + naar PGM</button>
       </div>
+      <div class="thumbone"><img id="ptThumb" alt="" hidden><span id="ptThumbMsg" class="mute"></span></div>
       <div class="toolrow">
         <label>Koppel aan <select id="ptSeat"></select></label>
         <label>als <select id="ptKind"><option value="main">hoofdpreset</option><option value="alt">alternatief</option></select></label>
@@ -114,6 +115,7 @@
         <button type="button" id="sSave">Zetelgegevens opslaan</button>
       </details>
       <label>Camera <select name="camera"></select></label>
+      <div class="thumbone"><img id="asThumb" alt="" hidden><span id="asThumbMsg" class="mute"></span></div>
       <label>Preset (0-127) <input name="preset" type="number" min="0" max="127" required></label>
       <div class="altbox">
         <div class="alt-title">Alternatief (optioneel): wordt enkele seconden gebruikt als de hoofdcamera al live staat</div>
@@ -147,6 +149,10 @@
         <label>Poort (TCP-besturing, standaard 5200) <input name="bPort" type="number"></label>
         <label>PGM-bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
         <label>PVW-bestemming (preview, telt vanaf 0) <input name="bPvw" type="number" min="0"></label>
+        <label class="chk"><input name="thEnabled" type="checkbox"> Miniaturen tonen onder het plan (webinterface BrightEye)</label>
+        <label>Poort webinterface <input name="thPort" type="number" min="1" max="65535"></label>
+        <label>Vernieuwen elke (ms) <input name="thMs" type="number" min="1000" step="500"></label>
+        <label>cpguid (optioneel, enkel als de miniaturen niet laden) <input name="thGuid" type="text"></label>
       </fieldset>
       <fieldset>
         <legend>Schakelen</legend>

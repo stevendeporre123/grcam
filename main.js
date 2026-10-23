@@ -147,6 +147,7 @@ function normalizeConfig(raw) {
   const c = { ...defaults, ...(raw || {}) };
   c.ipl = { ...defaults.ipl, ...c.ipl };
   c.brighteye = { ...defaults.brighteye, ...c.brighteye };
+  c.brighteye.thumbs = { ...defaults.brighteye.thumbs, ...(raw?.brighteye?.thumbs || {}) };
   c.ipl.host = cleanHost(c.ipl.host);
   c.brighteye.host = cleanHost(c.brighteye.host);
   c.timing = { ...defaults.timing, ...c.timing };
@@ -562,7 +563,32 @@ let downloadedUpdate = null;
  * IPC-handlers, per kanaalnaam. Argumenten komen van de UI via preload.js.
  * @type {Record<string, (event: object, arg: any) => any>}
  */
+/**
+ * Haalt de miniatuur (JPEG) van een BrightEye-bron op via de webinterface (poort 8080, zonder login).
+ * @param {number|'pgm'} which camera-id of 'pgm' (de bron die nu op de programma-uitgang staat)
+ * @returns {Promise<{src:number, camera:number|null, image:string}>} image is een data-URL
+ */
+async function brighteyeThumb(which) {
+  const b = config.brighteye;
+  const t = b.thumbs || {};
+  if (!b.host || t.enabled === false) throw new Error('Miniaturen staan uit of het Brighteye-adres ontbreekt');
+  let cam;
+  if (which === 'pgm') { const id = await pgmSource(); cam = config.cameras.find((c) => c.id === id); if (!cam) throw new Error('PGM-bron onbekend'); }
+  else cam = config.cameras.find((c) => c.id === Number(which));
+  if (!cam || cam.beSource === undefined) throw new Error('Camera zonder Brighteye-bronnummer');
+  const q = new URLSearchParams({ cmd: '2', mcmd: '10', src: String(cam.beSource) });
+  if (t.cpguid) q.set('cpguid', t.cpguid);
+  q.set('expire', String(Date.now() + 3600000));
+  const res = await fetch(`http://${b.host}:${Number(t.port) || 8080}/api/?${q}`, { signal: AbortSignal.timeout(2500), cache: 'no-store' });
+  if (!res.ok) throw new Error(`Miniatuur: HTTP ${res.status}`);
+  const type = (res.headers.get('content-type') || '').split(';')[0];
+  if (!type.startsWith('image/')) throw new Error(`Miniatuur: onverwacht antwoord (${type || 'onbekend'})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  return { src: cam.beSource, camera: cam.id, image: `data:${type};base64,${buf.toString('base64')}` };
+}
+
 const handlers = {
+  'thumb:get': (_e, { camera }) => brighteyeThumb(camera),
   'cfg:get': () => config,
   'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); restartMicIfChanged(); return true; },
   'plan:get': () => loadPlan(),
