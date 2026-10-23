@@ -197,6 +197,7 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(thp.ok && thp.data.src === 5, JSON.stringify(thp));
   assert.ok(/src=5&/.test(thumbUrls[thumbUrls.length - 1]), thumbUrls[thumbUrls.length - 1]);
   assert.ok(!(await call('thumb:get', { camera: 99 })).ok);
+  assert.ok(logs().some((l) => /Miniatuur .*bron 5.*\nhttp:\/\/127\.0\.0\.1:\d+\/api\/\?cmd=2&mcmd=10&src=5&cpguid=abc-guid&expire=\d+/.test(l.text)), 'volledige URL in het log');
   thSrv.close();
 
   // 3e. Microposten (CoCon API, long polling) -> 'mics'-event
