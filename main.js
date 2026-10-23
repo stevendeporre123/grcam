@@ -568,6 +568,8 @@ let downloadedUpdate = null;
  * @param {number|'pgm'} which camera-id of 'pgm' (de bron die nu op de programma-uitgang staat)
  * @returns {Promise<{src:number, camera:number|null, image:string}>} image is een data-URL
  */
+const thumbState = new Map();
+const thumbErrCount = new Map();
 async function brighteyeThumb(which) {
   const b = config.brighteye;
   const t = b.thumbs || {};
@@ -583,11 +585,24 @@ async function brighteyeThumb(which) {
   const q = new URLSearchParams({ cmd: '2', mcmd: '10', src: String(src) });
   if (t.cpguid) q.set('cpguid', t.cpguid);
   q.set('expire', String(Date.now() + 3600000));
-  const res = await fetch(`http://${b.host}:${Number(t.port) || 8080}/api/?${q}`, { signal: AbortSignal.timeout(2500), cache: 'no-store' });
-  if (!res.ok) throw new Error(`Miniatuur: HTTP ${res.status}`);
+  const url = `http://${b.host}:${Number(t.port) || 8080}/api/?${q}`;
+  // De volledige URL komt in het log (te testen in een browser), maar enkel bij de eerste poging en bij elke
+  // wijziging tussen gelukt/mislukt per bron; anders vol je het log met elke verversing.
+  const note = (state, text) => {
+    if (thumbState.get(src) === state && state === 'ok') return;
+    if (thumbState.get(src) === state && state === 'err' && thumbErrCount.get(src) > 4) return;
+    thumbState.set(src, state);
+    thumbErrCount.set(src, state === 'err' ? (thumbErrCount.get(src) || 0) + 1 : 0);
+    log({ dir: state === 'ok' ? 'info' : 'err', hex: '', text: `Miniatuur ${which === 'pgm' ? 'PGM' : cam.name} (bron ${src}): ${text}\n${url}` });
+  };
+  let res;
+  try { res = await fetch(url, { signal: AbortSignal.timeout(2500), cache: 'no-store' }); }
+  catch (e) { note('err', `geen verbinding (${e.cause?.code || e.name})`); throw new Error(`Miniatuur: geen verbinding (${e.cause?.code || e.name})`); }
+  if (!res.ok) { note('err', `HTTP ${res.status}`); throw new Error(`Miniatuur: HTTP ${res.status}`); }
   const type = (res.headers.get('content-type') || '').split(';')[0];
-  if (!type.startsWith('image/')) throw new Error(`Miniatuur: onverwacht antwoord (${type || 'onbekend'})`);
+  if (!type.startsWith('image/')) { note('err', `onverwacht antwoord (${type || 'onbekend'})`); throw new Error(`Miniatuur: onverwacht antwoord (${type || 'onbekend'})`); }
   const buf = Buffer.from(await res.arrayBuffer());
+  note('ok', 'gelukt');
   return { src, camera: cam ? cam.id : pgmCam, image: `data:${type};base64,${buf.toString('base64')}` };
 }
 
