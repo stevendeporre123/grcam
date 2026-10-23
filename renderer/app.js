@@ -794,6 +794,34 @@
     sel.innerHTML = cfg.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
     if (cur) sel.value = cur;
   }
+  /** Vult de lijst met personen/banken (zaalknoppen + plaatsen) om een geprobeerde preset aan te koppelen. */
+  function fillPresetSeats() {
+    const sel = $id('ptSeat');
+    const cur = sel.value;
+    const names = (plan.seats || []).filter((s) => s.naam).map((s) => ({ id: s.id, t: s.naam }));
+    const zalen = (cfg.zaal || []).map((z) => ({ id: z.id, t: `Zaal: ${z.label}` }));
+    const all = [...zalen, ...names.sort((a, b) => a.t.localeCompare(b.t, 'nl'))];
+    sel.innerHTML = all.map((o) => `<option value="${esc(o.id)}">${esc(o.t)}</option>`).join('');
+    if (cur) sel.value = cur;
+  }
+  $id('ptLink').addEventListener('click', async () => {
+    const id = $id('ptSeat').value;
+    const camera = Number($id('ptCam').value);
+    const preset = Number($id('ptNum').value);
+    const kind = $id('ptKind').value;
+    if (!id || !Number.isInteger(preset) || preset < 0 || preset > 127) { toast('Kies een plaats en een presetnummer (0-127)'); return; }
+    const cur = cfg.assign[id];
+    if (kind === 'alt') {
+      if (!cur) { toast(`${labelOf(id)} heeft nog geen hoofdpreset; koppel die eerst`); return; }
+      if (cur.camera === camera) { toast('Het alternatief moet een andere camera zijn dan de hoofdcamera'); return; }
+      cfg.assign[id] = { ...cur, alt: { camera, preset } };
+    } else {
+      if (cur?.alt && cur.alt.camera === camera) { toast('De hoofdcamera mag niet gelijk zijn aan de alternatieve camera'); return; }
+      cfg.assign[id] = { ...cur, camera, preset };
+    }
+    await persist();
+    toast(`${labelOf(id)}: ${kind === 'alt' ? 'alternatief' : 'hoofdpreset'} = ${camName(camera)} · preset ${preset}`);
+  });
   async function presetTry(target) {
     const camera = Number($id('ptCam').value);
     const preset = Number($id('ptNum').value);
@@ -831,7 +859,7 @@
     renderPlan();
     renderZaal();
     renderCamSel();
-    renderProgram(); fillPresetTry();
+    renderProgram(); fillPresetTry(); fillPresetSeats();
     markActive();
     $id('debugSw').checked = Boolean(cfg.debug);
     if (!cfg.debug) banner.hidden = true;
