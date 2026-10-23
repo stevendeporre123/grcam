@@ -16,7 +16,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # De versie van de .exe komt uit package.json. Die zetten we hier uit de tag (v0.2.0 -> 0.2.0);
