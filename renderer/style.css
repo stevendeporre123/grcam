@@ -135,3 +135,5 @@ dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
 .thumbs .th.live img { border-color:#e53935; }
 .thumbone { display:flex; align-items:center; gap:8px; margin:4px 0; }
 .thumbone img { width:160px; aspect-ratio:16/9; object-fit:cover; border:2px solid #333; border-radius:4px; }
+.thumbs .th.stopped { opacity:.8; }
+.thumbs .retry { align-self:center; }

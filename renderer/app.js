@@ -842,13 +842,21 @@
     if (!on) return;
     box.innerHTML = [...cfg.cameras.map((c) => ({ id: c.id, t: c.name })), { id: 'pgm', t: 'PGM' }]
       .map((o) => `<div class="th ${o.id === 'pgm' ? 'pgm' : ''}" data-th="${o.id}"><div class="ph"></div><span>${esc(o.t)}</span></div>`).join('');
+    const MAX_FOUTEN = 3; // na meer dan 3 opeenvolgende fouten stopt het ophalen van die miniatuur
     const tick = async () => {
       if (thumbBusy || document.hidden) return;
       thumbBusy = true;
       try {
-        await Promise.all([...box.querySelectorAll('.th')].map(async (el) => {
+        await Promise.all([...box.querySelectorAll('.th:not(.stopped)')].map(async (el) => {
           const id = el.dataset.th === 'pgm' ? 'pgm' : Number(el.dataset.th);
           const r = await api.thumb(id);
+          el.dataset.fails = r.ok ? '0' : String(Number(el.dataset.fails || 0) + 1);
+          if (!r.ok && Number(el.dataset.fails) > MAX_FOUTEN) {
+            el.classList.add('stopped');
+            el.title = `Gestopt na ${MAX_FOUTEN + 1} fouten: ${r.error}`;
+            const ph = el.querySelector('img, .ph'); if (ph) ph.style.opacity = '0.35';
+            return;
+          }
           const ph = el.querySelector('.ph, img');
           if (r.ok) {
             if (ph.tagName !== 'IMG') { const im = document.createElement('img'); im.alt = ''; ph.replaceWith(im); }
@@ -858,10 +866,19 @@
           } else { el.title = r.error; }
         }));
       } finally { thumbBusy = false; }
+      if (!box.querySelector('.th:not(.stopped)')) { // alles gestopt: stop de timer en bied handmatig opnieuw proberen aan
+        clearInterval(thumbTimer);
+        if (!box.querySelector('.retry')) box.insertAdjacentHTML('beforeend', '<button type="button" class="retry" title="Miniaturen opnieuw proberen">Miniaturen gestopt na fouten — opnieuw proberen</button>');
+      }
     };
     tick();
     thumbTimer = setInterval(tick, Math.max(1000, Number(t.intervalMs) || 3000));
   }
+  $id('thumbs').addEventListener('click', (e) => {
+    if (!e.target.closest('.retry')) return;
+    thumbSig = ''; // forceert een nieuwe opbouw met teller op nul
+    renderThumbs();
+  });
   // Miniatuur in de preset-tool en in de koppelmodal
   $id('ptCam').addEventListener('change', () => thumbInto($id('ptThumb'), $id('ptThumbMsg'), Number($id('ptCam').value)));
   $id('formAssign').camera.addEventListener('change', () => thumbInto($id('asThumb'), $id('asThumbMsg'), Number($id('formAssign').camera.value)));
