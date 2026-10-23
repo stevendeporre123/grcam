@@ -219,6 +219,6 @@ node tools/mock-ipl.js       # nep-IPL + nep-BrightEye; zet de hosts in de app o
 ## Aanvullingen (schakelen, microposten)
 
 - `main.js` `goTo()`: preset + PGM-take; leest eerst de BrightEye-status (`pgmSource()`) om te weten of de camera al live staat; vertraagde stappen worden geannuleerd met de teller `goSeq`.
-- `mic-api.js`: long-poll-lezer met tolerante uitlezing (`extractActive`), headers (`parseHeaders`) en backoff; geeft `mics`-events door aan de UI.
-- Events naar de UI: `pgm` ({camera}), `mics` ({active}).
+- `mic-api.js`: CoCon API-client (Connect, Notification long poll, GetState, Unsubscribe, Disconnect) met `parseMicState` en backoff; geeft `mics`-events ({active, requests}) door aan de UI.
+- Events naar de UI: `pgm` ({camera}), `mics` ({active, requests}).
 - `assign[id]` kan `alt:{camera,preset}` bevatten.

@@ -179,19 +179,28 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok((await call('cam:focus', { camera: 2 })).ok);
   assert.ok(logs().some((l) => l.dir === 'tx' && l.text === 'Autofocus uitvoeren'));
 
-  // 3e. Microposten-API (long polling) -> 'mics'-event
-  let n = 0;
+  // 3e. Microposten (CoCon API, long polling) -> 'mics'-event
+  let polls = 0;
   const micSrv = http.createServer((req, res) => {
-    setTimeout(() => res.end(JSON.stringify({ active: n++ < 2 ? [{ micId: 12 }] : [{ micId: 12 }, { micId: 30 }] })), 30);
+    const send = (b) => res.end(typeof b === 'string' ? b : JSON.stringify(b));
+    if (req.url === '/CoCon/Connect') return send({ Connect: true, id: 'abc' });
+    if (req.url.startsWith('/CoCon/Microphone/GetState')) return send({ GetState: { State: { Speakers: [], Requests: [], Replies: [] } } });
+    if (req.url.startsWith('/CoCon/Notification/id=abc')) {
+      return setTimeout(() => (polls++ < 1 ? send({ MicrophoneState: { Speakers: [12], Requests: [5], Replies: [] } })
+        : polls++ < 3 ? send({ MicrophoneState: { Speakers: [12, 30], Requests: [], Replies: [] } }) : null), 30);
+    }
+    send('0');
   }).listen(0, '127.0.0.1');
   await new Promise((r) => micSrv.on('listening', r));
   const mc = (await call('cfg:get')).data;
-  mc.micApi = { enabled: true, url: `http://127.0.0.1:${micSrv.address().port}/`, headers: '', activePath: '', idField: '', timeoutMs: 5000 };
+  mc.micApi = { enabled: true, host: '127.0.0.1', port: micSrv.address().port };
   assert.ok((await call('cfg:save', mc)).ok);
   await sleep(1500);
-  const mics = events.filter(([c]) => c === 'mics').map(([, d]) => d.active.join(','));
-  assert.deepStrictEqual(mics.slice(0, 2), ['12', '12,30'], JSON.stringify(mics));
+  const mics = events.filter(([c]) => c === 'mics').map(([, d]) => `${d.active}|${d.requests}`);
+  assert.deepStrictEqual(mics.slice(0, 3), ['|', '12|5', '12,30|'], JSON.stringify(mics));
   assert.deepStrictEqual((await call('mic:state')).data.active, [12, 30]);
+  const mt = await call('mic:test', { host: '127.0.0.1', port: micSrv.address().port });
+  assert.ok(mt.ok && Array.isArray(mt.data.active), JSON.stringify(mt));
   mc.micApi.enabled = false;
   await call('cfg:save', mc);
   micSrv.close();

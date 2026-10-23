@@ -134,13 +134,11 @@
         <label>Hoe lang de alternatieve camera live blijft (ms) <input name="tAlt" type="number" min="0" step="100"></label>
       </fieldset>
       <fieldset>
-        <legend>Microposten-API (long polling, optioneel)</legend>
+        <legend>Microposten (CoCon API, long polling, optioneel)</legend>
         <label class="chk"><input name="mEnabled" type="checkbox"> Inschakelen</label>
-        <label>URL <input name="mUrl" type="text" placeholder="http://server/api/..."></label>
-        <label>Extra headers (één per regel, bv. Authorization: Bearer …) <textarea name="mHeaders" rows="2"></textarea></label>
-        <label>Pad naar de actieve microposten (leeg = automatisch zoeken, bv. data.active) <input name="mPath" type="text"></label>
-        <label>Veld met het micropostnummer (leeg = automatisch, bv. micId) <input name="mId" type="text"></label>
-        <button type="button" id="mTest">Test (ruw antwoord komt in het log)</button>
+        <label>IP-adres van de CoCon-server (of Plixus Core) <input name="mHost" type="text" placeholder="10.0.28.x"></label>
+        <label>Poort (8990 volgens de handleiding; oudere voorbeelden 8890) <input name="mPort" type="number" min="1" max="65535"></label>
+        <button type="button" id="mTest">Test: verbinden en stand tonen (zie log)</button>
       </fieldset>
       <label class="chk"><input name="uCheck" type="checkbox"> Bij het opstarten controleren op een nieuwe versie</label>
       <menu>

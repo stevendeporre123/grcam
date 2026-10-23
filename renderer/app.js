@@ -41,6 +41,7 @@
   /** Camera die nu op PGM staat (melding van het main-proces) en actieve microposten (API). */
   let pgmCam = null;
   let micActive = [];
+  let micReq = [];
   /** Zetel- of zaal-id dat in de inleer-modal bewerkt wordt. */
   let editingId = null;
   /** Spiegelgegevens van de laatst getekende plan (voor het slepen van camera's). */
@@ -145,22 +146,28 @@
     document.querySelectorAll('#camSel button').forEach((b) => b.classList.toggle('pgm', pgmCam !== null && Number(b.dataset.cam) === pgmCam));
   }
 
-  /** Markeert de zetels waarvan de micropost actief is volgens de API en toont de namen boven het plan. */
+  /** Markeert zetels waarvan de micropost aan staat (rood) of in aanvraag is (geel) en toont de namen boven het plan. */
   function markMics() {
     const on = new Set(micActive);
-    const names = [];
+    const rq = new Set(micReq);
+    const names = []; const asking = [];
     document.querySelectorAll('#plan .seat').forEach((g) => {
       const s = seatOf(g.dataset.id);
       const hit = Boolean(s && s.mic != null && on.has(s.mic));
+      const ask = Boolean(s && s.mic != null && rq.has(s.mic)) && !hit;
       g.classList.toggle('mic-on', hit);
+      g.classList.toggle('mic-req', ask);
       if (hit) names.push(`${s.naam} (mic ${s.mic})`);
+      if (ask) asking.push(`${s.naam} (mic ${s.mic})`);
     });
-    const unknown = micActive.filter((m) => !plan.seats.some((s) => s.mic === m));
+    const known = (m) => plan.seats.some((s) => s.mic === m);
+    for (const m of micActive) if (!known(m)) names.push(`onbekende micropost ${m}`);
     const el = $id('micInfo');
-    el.hidden = !micActive.length;
-    el.textContent = micActive.length
-      ? `Micropost aan: ${[...names, ...unknown.map((m) => `onbekende micropost ${m}`)].join(', ')}`
-      : '';
+    const parts = [];
+    if (names.length) parts.push(`Micropost aan: ${names.join(', ')}`);
+    if (asking.length) parts.push(`Aanvraag: ${asking.join(', ')}`);
+    el.hidden = !parts.length;
+    el.textContent = parts.join(' — ');
   }
 
   /** Tekent de zaalknoppen; de randkleur toont de gekoppelde camera. */
@@ -618,8 +625,7 @@
     f.tTake.value = cfg.timing?.takeDelayMs ?? 1500;
     f.tAlt.value = cfg.timing?.altHoldMs ?? 4000;
     const m = cfg.micApi || {};
-    f.mEnabled.checked = !!m.enabled; f.mUrl.value = m.url || ''; f.mHeaders.value = m.headers || '';
-    f.mPath.value = m.activePath || ''; f.mId.value = m.idField || '';
+    f.mEnabled.checked = !!m.enabled; f.mHost.value = m.host || ''; f.mPort.value = m.port || 8990;
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
     $id('dlgSettings').showModal();
   });
@@ -633,13 +639,14 @@
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
     cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
-    cfg.micApi = { ...(cfg.micApi || {}), enabled: f.mEnabled.checked, url: f.mUrl.value.trim(), headers: f.mHeaders.value, activePath: f.mPath.value.trim(), idField: f.mId.value.trim() };
+    cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8990 };
     await persist();
   });
   $id('mTest').addEventListener('click', async () => {
     const f = $id('formSettings');
-    const r = await run(api.micTest({ url: f.mUrl.value.trim(), headers: f.mHeaders.value, activePath: f.mPath.value.trim(), idField: f.mId.value.trim() }));
-    if (r.ok) toast(`Microposten-API: HTTP ${r.data.status}, zie het verkeerslog voor het antwoord`);
+    const clean = (v) => v.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '');
+    const r = await run(api.micTest({ host: clean(f.mHost.value), port: Number(f.mPort.value) || 8990 }));
+    if (r.ok) toast('CoCon API bereikbaar, zie het verkeerslog voor de stand');
   });
 
   // ---------- Updates ----------
@@ -747,7 +754,7 @@
 
   // Camera op PGM en actieve microposten komen uit het main-proces
   api.onPgm((d) => { pgmCam = d.camera ?? null; renderCamSel(); markCams(); });
-  api.onMics((d) => { micActive = d.active || []; markMics(); });
+  api.onMics((d) => { micActive = d.active || []; micReq = d.requests || []; markMics(); });
 
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
   // Test alle camera's; de volledige test (met debug ook de laatste preset, plus Brighteye) loopt in het main-proces.
@@ -804,7 +811,7 @@
     cfg = (await api.getConfig()).data;
     plan = (await api.getPlan()).data;
     buildPad();
-    micActive = (await api.micState()).data?.active || [];
+    { const s = (await api.micState()).data || {}; micActive = s.active || []; micReq = s.requests || []; }
     renderAll();
     initTable();
     refreshTable();

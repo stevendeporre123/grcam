@@ -1,40 +1,68 @@
 'use strict';
 const assert = require('assert');
 const http = require('http');
-const { extractActive, parseHeaders, createPoller } = require('../mic-api');
+const { parseMicState, probe, createPoller } = require('../mic-api');
 
-// Gangbare vormen
-assert.deepStrictEqual(extractActive([12, 5, 12]), [5, 12]);
-assert.deepStrictEqual(extractActive({ active: [{ micId: 7 }, { micId: 3 }] }), [3, 7]);
-assert.deepStrictEqual(extractActive({ data: { microphones: [{ id: 1, state: 'on' }, { id: 2, state: 'off' }, { id: 3, active: false }, { id: 4, active: true }] } }), [1, 4]);
-assert.deepStrictEqual(extractActive({ mics: { 12: true, 15: false, 20: 'on' } }), [12, 20]);
-assert.deepStrictEqual(extractActive({ a: { b: { list: [{ seatNumber: '14' }] } } }, { activePath: 'a.b.list' }), [14]);
-assert.deepStrictEqual(extractActive({ a: [{ x: 9 }] }, { activePath: 'a', idField: 'x' }), [9]);
-assert.deepStrictEqual(extractActive({ nothing: 'here' }), []);
-assert.deepStrictEqual(parseHeaders('Authorization: Bearer abc\r\nX-A:b'), { Authorization: 'Bearer abc', 'X-A': 'b' });
+// Antwoorden zoals in de CoCon API-handleiding (ook de slordige schrijfwijzen)
+assert.deepStrictEqual(parseMicState('{"MicrophoneState":{"Speakers":[6],"Requests":[],"Replies":[]}}'), { active: [6], requests: [] });
+assert.deepStrictEqual(parseMicState('{“MicrophoneState”:{“Speakers”:[1,5];”Requests”:[7]}}'), { active: [1, 5], requests: [7] });
+assert.deepStrictEqual(parseMicState('{"GetState":{"State":{"Speakers":[5],"Requests":[4],"Replies":[]}}}'), { active: [5], requests: [4] });
+assert.deepStrictEqual(parseMicState('{"Get":{"MicrophoneMode":{"MaxNrActive":4,"Mode":"Request"},"State":{"Requests":[],"Speakers":[]}}}'), { active: [], requests: [] });
+assert.strictEqual(parseMicState('{"Notification":"Error 408"}'), null);
+assert.strictEqual(parseMicState('{"MicrophoneMode":{"Mode":"Operator"}}'), null);
 
-// Poller tegen een lokale server die als long poll antwoordt
-(async () => {
-  let n = 0;
-  const bodies = [[{ id: 3 }], [{ id: 3 }], [{ id: 3 }, { id: 8 }], []];
+/** Nep-CoCon: Connect, Unsubscribe, GetState en een Notification die om beurt time-out, een gebeurtenis of een verlopen sessie geeft. */
+function fakeCoCon() {
+  const calls = [];
+  let polls = 0; let sessions = 0;
+  const script = ['408', { Speakers: [3], Requests: [] }, { Speakers: [3, 8], Requests: [2] }, '400', { Speakers: [], Requests: [] }];
   const srv = http.createServer((req, res) => {
-    assert.strictEqual(req.headers['x-test'], 'ja');
-    setTimeout(() => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ active: bodies[Math.min(n++, bodies.length - 1)] })); }, 30);
-  }).listen(0);
-  await new Promise((r) => srv.on('listening', r));
-  const seen = [];
-  const logs = [];
-  const cfg = { enabled: true, url: `http://127.0.0.1:${srv.address().port}/`, headers: 'X-Test: ja' };
-  const p = createPoller({ getConfig: () => cfg, onChange: (a) => seen.push(a), log: (m, l) => logs.push([l, m]), minGapMs: 20 });
+    calls.push(req.url);
+    const send = (b, code = 200) => { res.statusCode = code; res.end(typeof b === 'string' ? b : JSON.stringify(b)); };
+    if (req.url === '/CoCon/Connect') return send({ Connect: true, id: `sess-${++sessions}` });
+    if (req.url.startsWith('/CoCon/Unsubscribe/')) return send({ UnSubscribe: { result: true } });
+    if (req.url === '/CoCon/Microphone/GetState') return send({ GetState: { State: { Speakers: [], Requests: [], Replies: [] } } });
+    if (req.url.startsWith('/CoCon/Disconnect/')) return send('0');
+    if (req.url.startsWith('/CoCon/Notification/id=')) {
+      const step = script[Math.min(polls++, script.length)];
+      return setTimeout(() => {
+        if (step === undefined) return; // blijft hangen (long poll)
+        if (step === '408') return send({ Notification: 'Error 408' }, 408);
+        if (step === '400') return send({ Notification: 'Error 400' }, 400);
+        send({ MicrophoneState: { ...step, Replies: [] } });
+      }, 20);
+    }
+    send('?', 404);
+  });
+  return { srv, calls, sessions: () => sessions };
+}
+
+(async () => {
+  const f = fakeCoCon();
+  f.srv.listen(0, '127.0.0.1');
+  await new Promise((r) => f.srv.on('listening', r));
+  const port = f.srv.address().port;
+  const cfg = { enabled: true, host: '127.0.0.1', port };
+
+  const pr = await probe(cfg);
+  assert.deepStrictEqual(pr.state, { active: [], requests: [] });
+
+  const seen = []; const logs = [];
+  const p = createPoller({ getConfig: () => cfg, onChange: (s) => seen.push(s), log: (m, l) => logs.push([l, m]), minGapMs: 10, pollTimeoutMs: 2000 });
   p.restart();
-  await new Promise((r) => setTimeout(r, 600));
+  await new Promise((r) => setTimeout(r, 700));
   p.stop();
-  srv.close();
-  assert.deepStrictEqual(seen.slice(0, 3), [[3], [3, 8], []], JSON.stringify(seen)); // geen dubbele meldingen
-  assert.ok(logs.some(([, m]) => /actief = 3,\s*8/.test(m)));
+  await new Promise((r) => setTimeout(r, 50));
+  // eerste stand (leeg), dan [3], dan [3,8]+aanvraag [2]; na de verlopen sessie opnieuw verbonden en leeg
+  assert.deepStrictEqual(seen.map((s) => `${s.active}|${s.requests}`).slice(0, 4), ['|', '3|', '3,8|2', '|'].map((x) => x), JSON.stringify(seen));
+  assert.ok(f.sessions() >= 3, 'na Error 400 een nieuwe sessie (plus de testsessie)');
+  assert.ok(f.calls.some((u) => u.startsWith('/CoCon/Unsubscribe/?Model=Voting&id=')), 'andere modellen uitgeschreven');
+  assert.ok(f.calls.some((u) => u.startsWith('/CoCon/Disconnect/')), 'sessie netjes afgesloten');
+  assert.ok(!logs.some(([l]) => l === 'err'), JSON.stringify(logs));
+  f.srv.close();
 
   // Onbereikbaar: één foutmelding, geen storm
-  const bad = createPoller({ getConfig: () => ({ enabled: true, url: 'http://127.0.0.1:9/' }), onChange: () => {}, log: (m, l) => logs.push([l, m]), minGapMs: 10 });
+  const bad = createPoller({ getConfig: () => ({ enabled: true, host: '127.0.0.1', port: 9 }), onChange: () => {}, log: (m, l) => logs.push([l, m]), minGapMs: 10 });
   bad.restart();
   await new Promise((r) => setTimeout(r, 300));
   bad.stop();

@@ -150,7 +150,7 @@ function normalizeConfig(raw) {
   c.ipl.host = cleanHost(c.ipl.host);
   c.brighteye.host = cleanHost(c.brighteye.host);
   c.timing = { ...defaults.timing, ...c.timing };
-  c.micApi = { ...defaults.micApi, ...c.micApi };
+  c.micApi = { enabled: Boolean(c.micApi?.enabled), host: cleanHost(c.micApi?.host), port: Number(c.micApi?.port) || defaults.micApi.port };
   // Ontbrekende zaalknoppen (zaal3, zaal4 bij een oudere config) aanvullen; bestaande labels blijven.
   const haveZ = new Set((c.zaal || []).map((z) => z.id));
   c.zaal = [...(c.zaal || []), ...defaults.zaal.filter((z) => !haveZ.has(z.id))];
@@ -535,11 +535,11 @@ function restartMicIfChanged() {
   micKey = k;
   micPoller.restart();
 }
-/** Actieve microposten (nummers) volgens de API. @type {number[]} */
-let activeMics = [];
+/** Microposten (zetelnummers) die aan staan of in aanvraag zijn, volgens de CoCon API. */
+let micState = { active: [], requests: [] };
 const micPoller = createPoller({
-  getConfig: () => config.micApi || {},
-  onChange: (a) => { activeMics = a; broadcast('mics', { active: a }); },
+  getConfig: () => ({ ...config.micApi, host: cleanHost(config.micApi?.host) }),
+  onChange: (s) => { micState = s; broadcast('mics', s); },
   log: (text, dir) => log({ dir, hex: '', text }),
 });
 
@@ -582,17 +582,21 @@ const handlers = {
   'program:switch': (_e, { camera, target }) => brighteyeTake(camera, target === 'pvw' ? 'pvw' : 'pgm'),
   'seat:go': (_e, a) => goTo(a),
   'cam:focus': (_e, { camera }) => sendVisca(camera, visca.focusTrigger(camById(camera).viscaAddr)),
-  'mic:state': () => ({ active: activeMics, running: micPoller.running }),
-  // Eén keer de microposten-API bevragen en het ruwe antwoord tonen (om de instelling te controleren).
+  'mic:state': () => ({ ...micState, running: micPoller.running }),
+  // Eén keer verbinden met de CoCon API en de huidige microfoonstand tonen (om de instelling te controleren).
   'mic:test': async (_e, c) => {
-    const { parseHeaders, extractActive } = require('./mic-api');
-    if (!c || !c.url) throw new Error('Vul eerst de URL van de microposten-API in');
-    const res = await fetch(c.url, { headers: parseHeaders(c.headers), signal: AbortSignal.timeout(8000) });
-    const text = await res.text();
-    let active = null;
-    try { active = extractActive(JSON.parse(text), c); } catch { /* geen JSON */ }
-    log({ dir: res.ok ? 'info' : 'err', hex: '', text: `Microposten-API test: HTTP ${res.status}; actief = ${active ? (active.join(', ') || 'geen') : 'niet leesbaar (geen JSON)'} — ruw antwoord: ${text.replace(/\s+/g, ' ').slice(0, 400)}` });
-    return { status: res.status, active };
+    const { probe } = require('./mic-api');
+    const host = cleanHost(c?.host);
+    if (!host) throw new Error('Vul eerst het IP-adres van de CoCon-server in');
+    try {
+      const r = await probe({ host, port: Number(c.port) || 8990 });
+      log({ dir: 'info', hex: '', text: `CoCon API test: verbonden. Stand microposten: ${r.state ? `aan = ${r.state.active.join(', ') || 'geen'}; aanvraag = ${r.state.requests.join(', ') || 'geen'}` : 'niet leesbaar'} — ruw antwoord: ${r.stateText.replace(/\s+/g, ' ').slice(0, 300)}` });
+      return r.state;
+    } catch (e) {
+      const msg = e.cause?.code === 'ECONNREFUSED' ? `CoCon API weigert de verbinding op ${host}:${c.port || 8990}: is de API ingeschakeld en klopt de poort (8990 of 8890)?` : `CoCon API: ${e.message}${e.cause?.code ? ` (${e.cause.code})` : ''}`;
+      log({ dir: 'err', hex: '', text: msg });
+      throw new Error(msg);
+    }
   },
   // Preset uitproberen: preset oproepen op een camera en (optioneel) die camera naar PVW of PGM schakelen.
   'preset:try': async (_e, { camera, preset, target }) => {
@@ -716,4 +720,5 @@ app.whenReady().then(() => {
   }, 5000);
 });
 
+app.on('before-quit', () => micPoller.stop());
 app.on('window-all-closed', () => app.quit());

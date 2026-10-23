@@ -85,10 +85,7 @@
   },
   "micApi": {
     "enabled": false,
-    "url": "",
-    "headers": "",
-    "activePath": "",
-    "idField": "",
-    "timeoutMs": 60000
+    "host": "",
+    "port": 8990
   }
 }

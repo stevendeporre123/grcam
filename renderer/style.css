@@ -45,6 +45,7 @@ h1 { font-size:17px; margin:0; } h2 { font-size:15px; margin:0 0 8px; } h3 { mar
 .seat.active .base { stroke:var(--act,#fff) !important; stroke-width:4.2 !important; filter:drop-shadow(0 0 6px var(--act,#fff)); animation:pulse 1.3s ease-in-out infinite; }
 @keyframes pulse { 50% { stroke-width:6; filter:drop-shadow(0 0 12px var(--act,#fff)); } }
 .seat.mic-on .base { stroke:#ef4444 !important; stroke-width:3.6 !important; filter:drop-shadow(0 0 5px #ef4444); }
+.seat.mic-req .base { stroke:#fbbf24 !important; stroke-width:3 !important; stroke-dasharray:4 3; }
 .seat.mic-on.active .base { stroke:var(--act,#fff) !important; }
 .link { stroke-width:2.5; stroke-dasharray:7 5; opacity:.85; pointer-events:none; }
 .micinfo { align-self:stretch; background:#3b1212; border:1px solid #b91c1c; color:#fecaca; border-radius:8px; padding:8px 12px; font-weight:600; }

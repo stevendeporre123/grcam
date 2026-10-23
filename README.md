@@ -103,6 +103,8 @@ In inleermodus blijft het koppelvenster openstaan (niet-modaal) zodat de joystic
 
 De actieve plaats krijgt een dikke pulserende rand in de camerakleur en een stippellijn naar de camera; de camera op PGM heeft een rode ring met "PGM". Zetels waarvan de micropost actief is (microposten-API) lichten rood op, met de namen boven het plan.
 
-## Microposten-API (long polling)
+## Microposten (CoCon API, long polling)
 
-Instellingen → Microposten-API: URL, optionele headers, en eventueel het pad naar de actieve microposten (`data.active`) en het veld met het nummer (`micId`). Leeg = automatisch zoeken. *Test* toont het ruwe antwoord in het verkeerslog. De poller (`mic-api.js`) doet één verzoek tegelijk en start het volgende zodra het antwoord binnen is; bij fouten wacht hij steeds langer (2 s tot 30 s) en logt de fout één keer. De koppeling met een zetel loopt via het micropostnummer in het zetelvenster.
+Instellingen → Microposten: IP-adres van de CoCon-server (of Plixus Core) en de poort (8990 volgens de handleiding, oudere voorbeelden 8890). *Test* verbindt één keer en toont de stand in het verkeerslog.
+
+`mic-api.js` volgt de CoCon API-handleiding: `Connect` → sessie-id, `Notification/id=…` als long poll (30 s time-out = `Error 408` → meteen opnieuw; `Error 400` = sessie verlopen → opnieuw verbinden), schrijft zich uit van alle modellen behalve *Microphone*, en vraagt bij het verbinden de huidige stand op (`Microphone/GetState`). De gebeurtenis `MicrophoneState` geeft zetelnummers (SeatNr) voor *Speakers* (aan) en *Requests* (aanvraag). Dat zetelnummer is het **micropostnummer** dat je in het zetelvenster invult. Zetels met een micropost die aan staat lichten rood op, een aanvraag geeft een gele stippelrand; de namen staan boven het plan. Bij fouten wacht de poller steeds langer (2 s tot 30 s) en logt de fout één keer.
