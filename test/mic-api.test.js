@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const http = require('http');
-const { parseMicState, probe, createPoller, micOn, micOff, micMuteAll } = require('../mic-api');
+const { unwrap, parseMicState, probe, createPoller, micOn, micOff, micMuteAll } = require('../mic-api');
 
 // Antwoorden zoals in de CoCon API-handleiding (ook de slordige schrijfwijzen)
 assert.deepStrictEqual(parseMicState('{"MicrophoneState":{"Speakers":[6],"Requests":[],"Replies":[]}}'), { active: [6] });
@@ -9,6 +9,11 @@ assert.deepStrictEqual(parseMicState('{“MicrophoneState”:{“Speakers”:[1,
 assert.deepStrictEqual(parseMicState('{"GetState":{"State":{"Speakers":[5],"Requests":[4],"Replies":[]}}}'), { active: [5] });
 assert.deepStrictEqual(parseMicState('{"Get":{"MicrophoneMode":{"MaxNrActive":4,"Mode":"Request"},"State":{"Requests":[],"Speakers":[]}}}'), { active: [] });
 assert.strictEqual(parseMicState('{"Notification":"Error 408"}'), null);
+// Dubbel gecodeerd antwoord, zoals de echte server het stuurt (zie het log)
+const dbl = JSON.stringify(JSON.stringify({ Connect: true, id: 'bad8804f-ee43' }));
+assert.strictEqual(unwrap(dbl), '{"Connect":true,"id":"bad8804f-ee43"}');
+assert.deepStrictEqual(parseMicState(JSON.stringify(JSON.stringify({ GetState: { State: { Speakers: [4, 2], Requests: [], Replies: [] } } }))), { active: [2, 4] });
+assert.strictEqual(unwrap('0'), '0'); assert.strictEqual(unwrap('"0"'), '0');
 assert.strictEqual(parseMicState('{"MicrophoneMode":{"Mode":"Operator"}}'), null);
 
 /** Nep-CoCon: Connect, Unsubscribe, GetState en een Notification die om beurt time-out, een gebeurtenis of een verlopen sessie geeft. */
@@ -18,7 +23,7 @@ function fakeCoCon() {
   const script = ['408', { Speakers: [3], Requests: [] }, { Speakers: [3, 8], Requests: [2] }, '400', { Speakers: [], Requests: [] }];
   const srv = http.createServer((req, res) => {
     calls.push(req.url);
-    const send = (b, code = 200) => { res.statusCode = code; res.end(typeof b === 'string' ? b : JSON.stringify(b)); };
+    const send = (b, code = 200) => { res.statusCode = code; res.end(typeof b === 'string' ? b : JSON.stringify(JSON.stringify(b))); };
     if (req.url === '/CoCon/Connect') return send({ Connect: true, id: `sess-${++sessions}` });
     if (req.url.startsWith('/CoCon/Unsubscribe/')) return send({ UnSubscribe: { result: true } });
     if (req.url === '/CoCon/Microphone/GetState') return send({ GetState: { State: { Speakers: [], Requests: [], Replies: [] } } });

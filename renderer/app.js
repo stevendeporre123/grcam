@@ -651,7 +651,7 @@
     f.tTake.value = cfg.timing?.takeDelayMs ?? 1500;
     f.tAlt.value = cfg.timing?.altHoldMs ?? 4000;
     const m = cfg.micApi || {};
-    f.mEnabled.checked = !!m.enabled; f.mHost.value = m.host || ''; f.mPort.value = m.port || 8990;
+    f.mEnabled.checked = !!m.enabled; f.mHost.value = m.host || ''; f.mPort.value = m.port || 8890;
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
     $id('dlgSettings').showModal();
   });
@@ -665,13 +665,13 @@
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
     cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
-    cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8990 };
+    cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 };
     await persist();
   });
   $id('mTest').addEventListener('click', async () => {
     const f = $id('formSettings');
     const clean = (v) => v.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '');
-    const r = await run(api.micTest({ host: clean(f.mHost.value), port: Number(f.mPort.value) || 8990 }));
+    const r = await run(api.micTest({ host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 }));
     if (r.ok) toast('CoCon API bereikbaar, zie het verkeerslog voor de stand');
   });
 

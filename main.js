@@ -529,7 +529,7 @@ async function goTo({ camera, preset, alt }) {
 // ---------- Microposten-API (long polling) ----------
 /** CoCon-adres uit de config; fout als het niet ingevuld is. */
 function micCfg() {
-  const c = { host: cleanHost(config.micApi?.host), port: Number(config.micApi?.port) || 8990 };
+  const c = { host: cleanHost(config.micApi?.host), port: Number(config.micApi?.port) || 8890 };
   if (!c.host) throw new Error('Vul eerst het IP-adres van de CoCon-server in (Instellingen → Microposten)');
   return c;
 }
@@ -543,7 +543,11 @@ function restartMicIfChanged() {
 }
 /** Microposten (zetelnummers) die aan staan, volgens de CoCon API. */
 let micState = { active: [] };
+/** Elk CoCon-verzoek (volledige URL) en antwoord naar het verkeerslog. */
+const micTrace = (dir, text) => log({ dir, hex: '', text });
+const micFetch = () => require('./mic-api').tracedFetch(fetch, micTrace);
 const micPoller = createPoller({
+  fetchImpl: (...a) => micFetch()(...a),
   getConfig: () => ({ ...config.micApi, host: cleanHost(config.micApi?.host) }),
   onChange: (s) => { micState = s; broadcast('mics', s); },
   log: (text, dir) => log({ dir, hex: '', text }),
@@ -590,20 +594,20 @@ const handlers = {
   'cam:focus': (_e, { camera }) => sendVisca(camera, visca.focusTrigger(camById(camera).viscaAddr)),
   'mic:state': () => ({ ...micState, running: micPoller.running }),
   // Micro('s) uitschakelen via de CoCon API
-  'mic:on': (_e, { seat }) => { const { micOn } = require('./mic-api'); return micOn(micCfg(), seat).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} aangezet` })); },
-  'mic:off': (_e, { seat }) => { const { micOff } = require('./mic-api'); return micOff(micCfg(), seat).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} uitgeschakeld` })); },
-  'mic:muteAll': () => { const { micMuteAll } = require('./mic-api'); return micMuteAll(micCfg()).then(() => log({ dir: 'info', hex: '', text: 'Alle microposten uitgeschakeld' })); },
+  'mic:on': (_e, { seat }) => { const { micOn } = require('./mic-api'); return micOn(micCfg(), seat, micFetch()).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} aangezet` })); },
+  'mic:off': (_e, { seat }) => { const { micOff } = require('./mic-api'); return micOff(micCfg(), seat, micFetch()).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} uitgeschakeld` })); },
+  'mic:muteAll': () => { const { micMuteAll } = require('./mic-api'); return micMuteAll(micCfg(), micFetch()).then(() => log({ dir: 'info', hex: '', text: 'Alle microposten uitgeschakeld' })); },
   // Eén keer verbinden met de CoCon API en de huidige microfoonstand tonen (om de instelling te controleren).
   'mic:test': async (_e, c) => {
     const { probe } = require('./mic-api');
     const host = cleanHost(c?.host);
     if (!host) throw new Error('Vul eerst het IP-adres van de CoCon-server in');
     try {
-      const r = await probe({ host, port: Number(c.port) || 8990 });
+      const r = await probe({ host, port: Number(c.port) || 8890 }, micFetch());
       log({ dir: 'info', hex: '', text: `CoCon API test: verbonden. Microposten aan: ${r.state ? (r.state.active.join(', ') || 'geen') : 'niet leesbaar'} — ruw antwoord: ${r.stateText.replace(/\s+/g, ' ').slice(0, 300)}` });
       return r.state;
     } catch (e) {
-      const msg = e.cause?.code === 'ECONNREFUSED' ? `CoCon API weigert de verbinding op ${host}:${c.port || 8990}: is de API ingeschakeld en klopt de poort (8990 of 8890)?` : `CoCon API: ${e.message}${e.cause?.code ? ` (${e.cause.code})` : ''}`;
+      const msg = e.cause?.code === 'ECONNREFUSED' ? `CoCon API weigert de verbinding op ${host}:${c.port || 8890}: is de API ingeschakeld en klopt de poort (8890 of 8990)?` : `CoCon API: ${e.message}${e.cause?.code ? ` (${e.cause.code})` : ''}`;
       log({ dir: 'err', hex: '', text: msg });
       throw new Error(msg);
     }

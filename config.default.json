@@ -85,7 +85,7 @@
   },
   "micApi": {
     "enabled": false,
-    "host": "",
-    "port": 8990
+    "host": "localhost",
+    "port": 8890
   }
 }

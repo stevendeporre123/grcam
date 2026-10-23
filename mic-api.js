@@ -14,7 +14,7 @@
  *     `Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests` (alle micro's uit, ook de voorzitter).
  *  4. Bij het verbinden vragen we de huidige stand op (`GET /CoCon/Microphone/GetState`) en schrijven we ons uit van
  *     de andere modellen (Room, Voting, ...) zodat de server ons enkel de microfoongebeurtenissen stuurt.
- * Standaardpoort volgens de handleiding: 8990 (voorbeelden in het document gebruiken 8890); instelbaar.
+ * Standaardpoort: 8890 (CoCon op dezelfde pc, zoals in de voorbeelden van de handleiding); Plixus Core gebruikt 8990. Instelbaar.
  * De uitlezing van antwoorden is tolerant (de handleiding toont op plaatsen ';' in plaats van ',' en gekrulde aanhalingstekens).
  * De module kent geen Electron; `fetch` is vervangbaar (testbaar).
  */
@@ -35,7 +35,7 @@ function arrayOf(text, name) {
  * @returns {{active:number[]}|null} null als het antwoord geen microfoonstand bevat
  */
 function parseMicState(text) {
-  const s = String(text);
+  const s = unwrap(text);
   const speakers = arrayOf(s, 'Speakers');
   if (speakers === null) return null;
   const sort = (a) => [...new Set(a)].sort((x, y) => x - y);
@@ -43,7 +43,45 @@ function parseMicState(text) {
 }
 
 /** Basisadres van de API. @param {{host:string, port?:number}} c */
-const baseUrl = (c) => `http://${c.host}:${Number(c.port) || 8990}/CoCon`;
+const baseUrl = (c) => `http://${c.host}:${Number(c.port) || 8890}/CoCon`;
+
+/**
+ * CoCon stuurt zijn JSON soms als tekst in aanhalingstekens terug (`"{\"Connect\":true,...}"`, dubbel gecodeerd).
+ * Dit pakt zo'n antwoord uit tot gewone JSON-tekst; ander antwoord blijft ongewijzigd.
+ * @param {string} text
+ * @returns {string}
+ */
+function unwrap(text) {
+  let t = String(text).trim();
+  for (let i = 0; i < 2 && t.startsWith('"'); i++) {
+    try { const v = JSON.parse(t); if (typeof v !== 'string') break; t = v.trim(); } catch { break; }
+  }
+  return t;
+}
+
+/** Oorzaak van een netwerkfout leesbaar maken (`fetch failed` zegt zelf niets). */
+const why = (e) => `${e.message}${e.cause ? ` (${e.cause.code || e.cause.message})` : ''}`;
+
+/**
+ * Verpakt `fetch` zodat elk verzoek met de volledige URL en elk antwoord (ingekort) naar `trace` gaat.
+ * @param {typeof fetch} fetchImpl
+ * @param {(dir:'tx'|'rx'|'err', text:string) => void} trace
+ * @returns {typeof fetch}
+ */
+function tracedFetch(fetchImpl, trace) {
+  return async (url, opts) => {
+    trace('tx', `CoCon: GET ${url}`);
+    try {
+      const res = await fetchImpl(url, opts);
+      const body = (await res.clone().text()).replace(/\s+/g, ' ').trim();
+      trace(res.ok ? 'rx' : 'err', `CoCon: HTTP ${res.status} op ${url} — ${body ? body.slice(0, 300) : '(leeg antwoord)'}`);
+      return res;
+    } catch (e) {
+      trace('err', `CoCon: ${url} mislukt: ${e.name === 'AbortError' ? 'geen antwoord (time-out)' : why(e)}`);
+      throw e;
+    }
+  };
+}
 
 /** Verzoek met time-out; geeft de tekst terug. */
 async function getText(fetchImpl, url, timeoutMs) {
@@ -51,9 +89,12 @@ async function getText(fetchImpl, url, timeoutMs) {
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, { signal: ctrl.signal });
-    const text = await res.text();
-    if (!res.ok && !/Error 40[08]/.test(text)) throw new Error(`HTTP ${res.status}: ${text.slice(0, 120)}`);
+    const text = unwrap(await res.text());
+    if (!res.ok && !/Error 40[08]/.test(text)) throw new Error(`HTTP ${res.status} op ${url}: ${text.slice(0, 120)}`);
     return text;
+  } catch (e) {
+    if (e.name === 'AbortError' || /^HTTP /.test(e.message)) throw e;
+    throw new Error(`${why(e)} bij ${url}`);
   } finally { clearTimeout(timer); }
 }
 
@@ -193,4 +234,4 @@ const micOn = (c, seat, fetchImpl) => micSet('On', c, seat, fetchImpl);
 /** Alle microposten uitschakelen (inclusief voorzitter en aanvragen). */
 const micMuteAll = (c, fetchImpl) => command(c, 'Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests', fetchImpl);
 
-module.exports = { parseMicState, probe, createPoller, baseUrl, command, micOn, micOff, micMuteAll };
+module.exports = { unwrap, tracedFetch, parseMicState, probe, createPoller, baseUrl, command, micOn, micOff, micMuteAll };
