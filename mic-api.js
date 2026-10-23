@@ -10,7 +10,7 @@
  *     Een sessie zonder poll gedurende 180 s vervalt (`Error 400`): dan opnieuw verbinden.
  *  3. Gebeurtenis `{"MicrophoneState":{"Speakers":[1,5],"Requests":[7],"Replies":[]}}`: de getallen zijn zetelnummers
  *     (SeatNr); dat is het micropostnummer dat bij een zetel is ingevuld. Alleen `Speakers` (aan) gebruiken we.
- *  5. Bedienen: `Microphone/SetState/?State=Off&SeatNr=n` (één micro uit) en
+ *  5. Bedienen: `Microphone/SetState/?State=On|Off&SeatNr=n` (één micro aan of uit) en
  *     `Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests` (alle micro's uit, ook de voorzitter).
  *  4. Bij het verbinden vragen we de huidige stand op (`GET /CoCon/Microphone/GetState`) en schrijven we ons uit van
  *     de andere modellen (Room, Voting, ...) zodat de server ons enkel de microfoongebeurtenissen stuurt.
@@ -182,13 +182,15 @@ async function command(c, path, fetchImpl = fetch) {
   throw new Error(`Onverwacht antwoord van CoCon: ${text.slice(0, 120)}`);
 }
 
-/** Eén micropost (zetelnummer) uitschakelen. */
-const micOff = (c, seat, fetchImpl) => {
+/** Eén micropost (zetelnummer) aan- of uitschakelen. */
+const micSet = (state, c, seat, fetchImpl) => {
   const n = Number(seat);
   if (!Number.isInteger(n) || n < 1) return Promise.reject(new Error('Ongeldig micropostnummer'));
-  return command(c, `Microphone/SetState/?State=Off&SeatNr=${n}`, fetchImpl);
+  return command(c, `Microphone/SetState/?State=${state}&SeatNr=${n}`, fetchImpl);
 };
+const micOff = (c, seat, fetchImpl) => micSet('Off', c, seat, fetchImpl);
+const micOn = (c, seat, fetchImpl) => micSet('On', c, seat, fetchImpl);
 /** Alle microposten uitschakelen (inclusief voorzitter en aanvragen). */
 const micMuteAll = (c, fetchImpl) => command(c, 'Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests', fetchImpl);
 
-module.exports = { parseMicState, probe, createPoller, baseUrl, command, micOff, micMuteAll };
+module.exports = { parseMicState, probe, createPoller, baseUrl, command, micOn, micOff, micMuteAll };

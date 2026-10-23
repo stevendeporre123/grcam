@@ -590,6 +590,7 @@ const handlers = {
   'cam:focus': (_e, { camera }) => sendVisca(camera, visca.focusTrigger(camById(camera).viscaAddr)),
   'mic:state': () => ({ ...micState, running: micPoller.running }),
   // Micro('s) uitschakelen via de CoCon API
+  'mic:on': (_e, { seat }) => { const { micOn } = require('./mic-api'); return micOn(micCfg(), seat).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} aangezet` })); },
   'mic:off': (_e, { seat }) => { const { micOff } = require('./mic-api'); return micOff(micCfg(), seat).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} uitgeschakeld` })); },
   'mic:muteAll': () => { const { micMuteAll } = require('./mic-api'); return micMuteAll(micCfg()).then(() => log({ dir: 'info', hex: '', text: 'Alle microposten uitgeschakeld' })); },
   // Eén keer verbinden met de CoCon API en de huidige microfoonstand tonen (om de instelling te controleren).

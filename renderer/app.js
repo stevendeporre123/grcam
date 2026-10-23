@@ -41,6 +41,8 @@
   /** Camera die nu op PGM staat (melding van het main-proces) en actieve microposten (API). */
   let pgmCam = null;
   let micActive = [];
+  /** Zetel of zaalknop die rechtsboven getoond wordt. */
+  let nowId = null;
   /** Zetel- of zaal-id dat in de inleer-modal bewerkt wordt. */
   let editingId = null;
   /** Spiegelgegevens van de laatst getekende plan (voor het slepen van camera's). */
@@ -160,6 +162,7 @@
     const enabled = Boolean(cfg.micApi?.enabled && cfg.micApi?.host);
     el.hidden = !enabled;
     el.classList.toggle('quiet', !items.length);
+    if (nowId) setNow(nowId); // knop "Micro aan/uit" volgt de stand
     el.innerHTML = '<span class="mi-text">' + (items.length ? 'Micropost aan:' : 'Geen micropost aan') + '</span>' +
       items.map((i) => `<span class="mi-chip">${esc(i.text)} <button data-micoff="${i.mic}" title="Deze micro uitschakelen">uit</button></span>`).join('') +
       '<button id="btnMuteAll" class="mi-all" title="Alle microposten uitschakelen">Alle micro\'s uit</button>';
@@ -195,11 +198,29 @@
    * @param {string} id zetel- of zaal-id
    */
   function setNow(id) {
+    nowId = id;
     const a = cfg.assign[id];
-    $id('now').innerHTML = a
+    const s = seatOf(id);
+    const micOk = Boolean(s && s.mic != null && cfg.micApi?.enabled && cfg.micApi?.host);
+    const isOn = micOk && micActive.includes(s.mic);
+    const micBtn = micOk
+      ? `<div class="now-mic"><span class="mute">Micropost ${s.mic}: ${isOn ? 'aan' : 'uit'}</span> ` +
+        (isOn ? `<button data-micoff="${s.mic}">Micro uit</button>` : `<button data-micon="${s.mic}">Micro aan</button>`) + '</div>'
+      : '';
+    $id('now').innerHTML = (a
       ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}${a.alt ? `<br><span class="mute">alternatief: ${esc(camName(a.alt.camera))} · preset ${a.alt.preset}</span>` : ''}`
-      : `<b>${esc(labelOf(id))}</b>Nog niet gekoppeld`;
+      : `<b>${esc(labelOf(id))}</b>Nog niet gekoppeld`) + micBtn;
   }
+
+  // Micro aan/uit voor de getoonde zetel (knoppen in het blok rechtsboven)
+  $id('now').addEventListener('click', async (e) => {
+    const on = e.target.closest('[data-micon]');
+    const off = e.target.closest('[data-micoff]');
+    if (!on && !off) return;
+    const n = Number((on || off).dataset.micon ?? (on || off).dataset.micoff);
+    const r = await run(on ? api.micOn(n) : api.micOff(n));
+    if (r.ok) toast(`Micropost ${n} ${on ? 'aangezet' : 'uitgeschakeld'}`);
+  });
 
   /**
    * Klik op een zetel of zaalknop. In inleermodus opent dit de modal, anders wordt de preset opgeroepen.

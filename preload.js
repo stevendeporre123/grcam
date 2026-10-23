@@ -46,6 +46,8 @@ contextBridge.exposeInMainWorld('api', {
   micState: () => call('mic:state'),
   /** Eén keer de microposten-API bevragen (ruw antwoord in het log). @param {object} c */
   micTest: (c) => call('mic:test', c),
+  /** Eén micropost (zetelnummer) aanzetten. @param {number} seat */
+  micOn: (seat) => call('mic:on', { seat }),
   /** Eén micropost (zetelnummer) uitschakelen. @param {number} seat */
   micOff: (seat) => call('mic:off', { seat }),
   /** Alle microposten uitschakelen. */

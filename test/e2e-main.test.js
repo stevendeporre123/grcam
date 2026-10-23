@@ -201,9 +201,10 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   const mics = events.filter(([c]) => c === 'mics').map(([, d]) => d.active.join(','));
   assert.deepStrictEqual(mics.slice(0, 3), ['', '12', '12,30'], JSON.stringify(mics));
   assert.deepStrictEqual((await call('mic:state')).data.active, [12, 30]);
+  assert.ok((await call('mic:on', { seat: 12 })).ok);
   assert.ok((await call('mic:off', { seat: 12 })).ok);
   assert.ok((await call('mic:muteAll')).ok);
-  assert.ok(micCalls.includes('/CoCon/Microphone/SetState/?State=Off&SeatNr=12') && micCalls.includes('/CoCon/Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests'), JSON.stringify(micCalls));
+  assert.ok(micCalls.includes('/CoCon/Microphone/SetState/?State=On&SeatNr=12') && micCalls.includes('/CoCon/Microphone/SetState/?State=Off&SeatNr=12') && micCalls.includes('/CoCon/Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests'), JSON.stringify(micCalls));
   const mt = await call('mic:test', { host: '127.0.0.1', port: micSrv.address().port });
   assert.ok(mt.ok && Array.isArray(mt.data.active), JSON.stringify(mt));
   mc.micApi.enabled = false;

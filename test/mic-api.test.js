@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('assert');
 const http = require('http');
-const { parseMicState, probe, createPoller, micOff, micMuteAll } = require('../mic-api');
+const { parseMicState, probe, createPoller, micOn, micOff, micMuteAll } = require('../mic-api');
 
 // Antwoorden zoals in de CoCon API-handleiding (ook de slordige schrijfwijzen)
 assert.deepStrictEqual(parseMicState('{"MicrophoneState":{"Speakers":[6],"Requests":[],"Replies":[]}}'), { active: [6] });
@@ -23,7 +23,7 @@ function fakeCoCon() {
     if (req.url.startsWith('/CoCon/Unsubscribe/')) return send({ UnSubscribe: { result: true } });
     if (req.url === '/CoCon/Microphone/GetState') return send({ GetState: { State: { Speakers: [], Requests: [], Replies: [] } } });
     if (req.url.startsWith('/CoCon/Disconnect/')) return send('0');
-    if (req.url === '/CoCon/Microphone/SetState/?State=Off&SeatNr=3') return send('0');
+    if (req.url === '/CoCon/Microphone/SetState/?State=Off&SeatNr=3' || req.url === '/CoCon/Microphone/SetState/?State=On&SeatNr=3') return send('0');
     if (req.url.startsWith('/CoCon/Microphone/SetState/')) return send('1');
     if (req.url === '/CoCon/Microphone/ClearMicrophoneList/?Type=SpeakersAndRequests') return send('0');
     if (req.url.startsWith('/CoCon/Notification/id=')) {
@@ -48,6 +48,7 @@ function fakeCoCon() {
   const cfg = { enabled: true, host: '127.0.0.1', port };
 
   await micOff(cfg, 3);
+  await micOn(cfg, 3);
   await assert.rejects(() => micOff(cfg, 99), /ongeldige waarde/);
   await assert.rejects(() => micOff(cfg, 0), /Ongeldig/);
   await micMuteAll(cfg);
