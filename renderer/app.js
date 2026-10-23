@@ -208,12 +208,21 @@
         (isOn ? `<button data-micoff="${s.mic}">Micro uit</button>` : `<button data-micon="${s.mic}">Micro aan</button>`) + '</div>'
       : '';
     $id('now').innerHTML = (a
-      ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}${a.alt ? `<br><span class="mute">alternatief: ${esc(camName(a.alt.camera))} · preset ${a.alt.preset}</span>` : ''}`
+      ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}${a.alt ? `<br><span class="mute">alternatief: ${esc(camName(a.alt.camera))} · preset ${a.alt.preset}</span><br><button data-usealt="${esc(id)}" title="Nu de alternatieve camera/preset op PGM zetten (de koppeling blijft zoals ze is)">Alternatief nu</button>` : ''}`
       : `<b>${esc(labelOf(id))}</b>Nog niet gekoppeld`) + micBtn;
   }
 
   // Micro aan/uit voor de getoonde zetel (knoppen in het blok rechtsboven)
   $id('now').addEventListener('click', async (e) => {
+    const useAlt = e.target.closest('[data-usealt]');
+    if (useAlt) {
+      const al = cfg.assign[useAlt.dataset.usealt]?.alt;
+      if (!al) return;
+      selectCamera(al.camera);
+      const r = await run(api.seatGo({ camera: al.camera, preset: al.preset }));
+      if (r.ok) toast(`Alternatief: ${camName(al.camera)} · preset ${al.preset}`);
+      return;
+    }
     const on = e.target.closest('[data-micon]');
     const off = e.target.closest('[data-micoff]');
     if (!on && !off) return;
@@ -436,6 +445,20 @@
     selectCamera(Number(f.altCamera.value));
     run(api.preset(Number(f.altCamera.value), Number(f.altPreset.value)));
     const ac = Number(f.altCamera.value); thumbSoon($id('asThumb'), $id('asThumbMsg'), () => ac);
+  });
+  // "Hoofd ⇄ alternatief omwisselen": de twee posities verwisselen en meteen bewaren
+  $id('aSwap').addEventListener('click', async () => {
+    const f = $id('formAssign');
+    if (f.altCamera.value === '' || f.altPreset.value === '') { toast('Er is nog geen alternatief om mee te wisselen'); return; }
+    [f.camera.value, f.altCamera.value] = [f.altCamera.value, f.camera.value];
+    [f.preset.value, f.altPreset.value] = [f.altPreset.value, f.preset.value];
+    selectCamera(Number(f.camera.value));
+    thumbInto($id('asThumb'), $id('asThumbMsg'), Number(f.camera.value));
+    const a = assignFromForm();
+    if (!a) return;
+    if (!applyAssign(a)) return;
+    await persist();
+    toast(`${labelOf(editingId)}: hoofd en alternatief omgewisseld`);
   });
   // "Alternatief opslaan in camera": huidige positie van de alternatieve camera bewaren onder het alternatieve presetnummer
   $id('aAltStore').addEventListener('click', async () => {
