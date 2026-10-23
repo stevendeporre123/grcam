@@ -3,7 +3,7 @@
 [hidden] { display:none !important; }
 html, body { height:100%; }
 body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui, "Segoe UI", sans-serif; display:flex; flex-direction:column; }
-header { display:flex; align-items:center; gap:16px; padding:8px 16px; border-bottom:1px solid var(--line); }
+header { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:8px 16px; border-bottom:1px solid var(--line); }
 h1 { font-size:17px; margin:0; } h2 { font-size:15px; margin:0 0 8px; } h3 { margin-top:0; }
 .tag { font-size:11px; background:#7c2d12; color:#fed7aa; padding:2px 8px; border-radius:10px; margin-left:8px; vertical-align:middle; }
 .spacer { flex:1; } .mute { color:var(--mute); font-weight:400; }
