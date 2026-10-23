@@ -194,7 +194,8 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(th1.ok && th1.data.image.startsWith('data:image/jpeg;base64,'), JSON.stringify(th1));
   assert.ok(/^\/api\/\?cmd=2&mcmd=10&src=\d+&cpguid=abc-guid&expire=\d+$/.test(thumbUrls[0]), thumbUrls[0]);
   const thp = await call('thumb:get', { camera: 'pgm' });
-  assert.ok(thp.ok || /PGM-bron onbekend/.test(thp.error), JSON.stringify(thp));
+  assert.ok(thp.ok && thp.data.src === 5, JSON.stringify(thp));
+  assert.ok(/src=5&/.test(thumbUrls[thumbUrls.length - 1]), thumbUrls[thumbUrls.length - 1]);
   assert.ok(!(await call('thumb:get', { camera: 99 })).ok);
   thSrv.close();
 

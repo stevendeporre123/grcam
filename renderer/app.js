@@ -659,7 +659,7 @@
     f.mEnabled.checked = !!m.enabled; f.mHost.value = m.host || ''; f.mPort.value = m.port || 8890;
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
     const th = cfg.brighteye.thumbs || {};
-    f.thEnabled.checked = th.enabled !== false; f.thPort.value = th.port || 8080; f.thMs.value = th.intervalMs || 3000; f.thGuid.value = th.cpguid || '';
+    f.thEnabled.checked = th.enabled !== false; f.thPort.value = th.port || 8080; f.thMs.value = th.intervalMs || 3000; f.thPgm.value = th.pgmSrc ?? 5; f.thGuid.value = th.cpguid || '';
     $id('dlgSettings').showModal();
   });
   $id('setCancel').addEventListener('click', () => $id('dlgSettings').close());
@@ -671,7 +671,7 @@
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
-    cfg.brighteye.thumbs = { enabled: f.thEnabled.checked, port: Number(f.thPort.value) || 8080, intervalMs: Math.max(1000, Number(f.thMs.value) || 3000), cpguid: f.thGuid.value.trim() };
+    cfg.brighteye.thumbs = { enabled: f.thEnabled.checked, port: Number(f.thPort.value) || 8080, intervalMs: Math.max(1000, Number(f.thMs.value) || 3000), pgmSrc: Number(f.thPgm.value) || 0, cpguid: f.thGuid.value.trim() };
     cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
     cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 };
     await persist();
@@ -831,7 +831,7 @@
             if (ph.tagName !== 'IMG') { const im = document.createElement('img'); im.alt = ''; ph.replaceWith(im); }
             el.querySelector('img').src = r.data.image;
             el.title = '';
-            if (id === 'pgm') el.querySelector('span').textContent = `PGM: ${camName(r.data.camera)}`;
+            if (id === 'pgm') el.querySelector('span').textContent = r.data.camera ? `PGM: ${camName(r.data.camera)}` : 'PGM';
           } else { el.title = r.error; }
         }));
       } finally { thumbBusy = false; }

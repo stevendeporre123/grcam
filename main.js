@@ -572,11 +572,15 @@ async function brighteyeThumb(which) {
   const b = config.brighteye;
   const t = b.thumbs || {};
   if (!b.host || t.enabled === false) throw new Error('Miniaturen staan uit of het Brighteye-adres ontbreekt');
-  let cam;
-  if (which === 'pgm') { const id = await pgmSource(); cam = config.cameras.find((c) => c.id === id); if (!cam) throw new Error('PGM-bron onbekend'); }
-  else cam = config.cameras.find((c) => c.id === Number(which));
-  if (!cam || cam.beSource === undefined) throw new Error('Camera zonder Brighteye-bronnummer');
-  const q = new URLSearchParams({ cmd: '2', mcmd: '10', src: String(cam.beSource) });
+  // PGM heeft een eigen bron in de BrightEye (standaard 5); de camera-thumbnails gebruiken het bronnummer van de camera.
+  let src; let cam = null;
+  if (which === 'pgm') src = Number(t.pgmSrc ?? 5);
+  else {
+    cam = config.cameras.find((c) => c.id === Number(which));
+    if (!cam || cam.beSource === undefined) throw new Error('Camera zonder Brighteye-bronnummer');
+    src = cam.beSource;
+  }
+  const q = new URLSearchParams({ cmd: '2', mcmd: '10', src: String(src) });
   if (t.cpguid) q.set('cpguid', t.cpguid);
   q.set('expire', String(Date.now() + 3600000));
   const res = await fetch(`http://${b.host}:${Number(t.port) || 8080}/api/?${q}`, { signal: AbortSignal.timeout(2500), cache: 'no-store' });
@@ -584,7 +588,7 @@ async function brighteyeThumb(which) {
   const type = (res.headers.get('content-type') || '').split(';')[0];
   if (!type.startsWith('image/')) throw new Error(`Miniatuur: onverwacht antwoord (${type || 'onbekend'})`);
   const buf = Buffer.from(await res.arrayBuffer());
-  return { src: cam.beSource, camera: cam.id, image: `data:${type};base64,${buf.toString('base64')}` };
+  return { src, camera: cam ? cam.id : pgmCam, image: `data:${type};base64,${buf.toString('base64')}` };
 }
 
 const handlers = {

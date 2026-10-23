@@ -118,4 +118,4 @@ Electron 45, electron-builder 26, DataTables 3 (zonder jQuery; die afhankelijkhe
 Onder het zaalplan toont de app de miniaturen van de 4 camera's en van PGM. Ze komen van de webinterface van de BrightEye
 (`http://<host>:8080/api/?cmd=2&mcmd=10&src=<bron>&expire=…`, geen login) en worden door het hoofdproces opgehaald.
 Dezelfde miniatuur staat in Hulpmiddelen → Preset uitproberen en in het koppelvenster van een plaats (ververst na "Oproepen" en na opslaan).
-Instellingen: Beheer → Instellingen (aan/uit, poort, interval, optionele `cpguid`). PGM volgt de bron die op de programma-uitgang staat.
+Instellingen: Beheer → Instellingen (aan/uit, poort, interval, optionele `cpguid`). PGM heeft een eigen bron in de BrightEye (standaard 5, instelbaar); het label toont de camera die live staat.
