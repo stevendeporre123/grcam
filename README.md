@@ -119,3 +119,12 @@ Onder het zaalplan toont de app de miniaturen van de 4 camera's en van PGM. Ze k
 (`http://<host>:8080/api/?cmd=2&mcmd=10&src=<bron>&expire=…`, geen login) en worden door het hoofdproces opgehaald.
 Dezelfde miniatuur staat in Hulpmiddelen → Preset uitproberen en in het koppelvenster van een plaats (ververst na "Oproepen" en na opslaan).
 Instellingen: Beheer → Instellingen (aan/uit, poort, interval, optionele `cpguid`). PGM heeft een eigen bron in de BrightEye (standaard 5, instelbaar); het label toont de camera die live staat.
+
+## Micro volgen (automatische tracking)
+
+Bovenaan staat de schakelaar **Micro volgen** (de Programma-knoppen 1–4 zijn weggehaald). Hij staat bij elke start uit en wordt niet bewaard; de CoCon-koppeling moet aanstaan.
+
+- De camera volgt het **laatst aangezette** micro, zoals een klik op die zitplaats (preset oproepen, dan PGM). Gaat dat micro uit terwijl er nog andere aanstaan, dan volgt de app het meest recente van de overblijvende. Gaan alle micro's uit, dan blijft de camera staan.
+- **Handmatig ingrijpen** (klik op een plaats, joystick, preset, programma-keuze) pauzeert de tracking tot er opnieuw een micro aangaat. Naast de schakelaar staat dan "gepauzeerd".
+- **Alternatief:** staat de gevraagde camera al live, dan gebruikt de app het alternatief van de zitplaats. Is er geen, dan neemt hij de overzichtspreset (Zaal 1–4) van de eerste camera die niet de gevraagde en niet de live camera is.
+- Een micropost zonder gekoppelde zitplaats of preset wordt genegeerd (staat in het log).

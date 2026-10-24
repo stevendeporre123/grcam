@@ -621,15 +621,21 @@
     if (b.dataset.tab === 'admin') table.columns.adjust();
   }));
 
-  /** Toont de "Programma"-knoppen (BrightEye) bovenaan als de koppeling aanstaat. */
-  function renderProgram() {
-    const el = $id('program');
-    const on = cfg.brighteye?.enabled;
-    el.hidden = !on;
-    if (!on) return;
-    el.innerHTML = '<span>Programma:</span>' + cfg.cameras.map((c) => `<button data-prog="${c.id}">${c.id}</button>`).join('');
-    el.querySelectorAll('[data-prog]').forEach((b) => b.addEventListener('click', () => run(api.program(Number(b.dataset.prog)))));
+  /** Schakelaar voor automatische micro-tracking (staat standaard uit en wordt niet bewaard). */
+  function renderProgram() { /* de Programma-knoppen zijn vervangen door de tracking-schakelaar */ }
+  function showTrack(s) {
+    $id('trackSw').checked = Boolean(s.enabled);
+    const seat = s.mic != null ? plan?.seats?.find((x) => x.mic === s.mic) : null;
+    $id('trackInfo').textContent = !s.enabled ? '' : s.paused ? 'gepauzeerd (handmatig) – wacht op volgend micro' : seat ? `volgt ${seat.naam}` : 'wacht op een micro';
+    $id('program').classList.toggle('on', Boolean(s.enabled));
   }
+  $id('trackSw').addEventListener('change', async (e) => {
+    if (e.target.checked && !(cfg.micApi?.enabled && cfg.micApi?.host)) { e.target.checked = false; toast('Zet eerst de CoCon-koppeling aan (Beheer → Instellingen)'); return; }
+    const r = await run(api.trackSet(e.target.checked));
+    if (r.ok) showTrack(r.data); else e.target.checked = !e.target.checked;
+  });
+  api.onTrack(showTrack);
+  api.trackGet().then((r) => { if (r.ok) showTrack(r.data); });
 
   /**
    * Leest de camera-rijen uit het instellingenformulier en zet ze in `cfg.cameras`.

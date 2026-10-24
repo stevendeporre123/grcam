@@ -137,3 +137,5 @@ dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
 .thumbone img { width:160px; aspect-ratio:16/9; object-fit:cover; border:2px solid #333; border-radius:4px; }
 .thumbs .th.stopped { opacity:.8; }
 .thumbs .retry { align-self:center; }
+.trackSw { display:flex; gap:6px; align-items:center; cursor:pointer; }
+.program.on .trackSw { color:#7ee787; font-weight:600; }
