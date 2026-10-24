@@ -687,6 +687,9 @@
     const m = cfg.micApi || {};
     f.mEnabled.checked = !!m.enabled; f.mHost.value = m.host || ''; f.mPort.value = m.port || 8890;
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
+    f.trOverview.innerHTML = '<option value="">— niets doen —</option>' + (cfg.zaal || []).map((z) => `<option value="${esc(z.id)}">${esc(z.label)}</option>`).join('');
+    f.trOverview.value = cfg.tracking?.overview ?? '';
+    f.trDelay.value = cfg.tracking?.delayMs ?? 5000;
     const th = cfg.brighteye.thumbs || {};
     f.thEnabled.checked = th.enabled !== false; f.thPort.value = th.port || 8080; f.thMs.value = th.intervalMs || 3000; f.thPgm.value = th.pgmSrc ?? 5; f.thGuid.value = th.cpguid || '';
     $id('dlgSettings').showModal();
@@ -700,6 +703,7 @@
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
+    cfg.tracking = { overview: f.trOverview.value, delayMs: Math.max(0, Number(f.trDelay.value) || 0) };
     cfg.brighteye.thumbs = { enabled: f.thEnabled.checked, port: Number(f.thPort.value) || 8080, intervalMs: Math.max(1000, Number(f.thMs.value) || 3000), pgmSrc: Number(f.thPgm.value) || 0, cpguid: f.thGuid.value.trim() };
     cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
     cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 };

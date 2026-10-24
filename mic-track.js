@@ -4,10 +4,10 @@
  * Automatische tracking: de camera volgt steeds het laatst aangezette micro.
  * - Houdt de volgorde bij waarin microposten aangingen. Doel = het meest recente dat nog aanstaat.
  * - Een handmatige actie (`manual()`) pauzeert de tracking tot er opnieuw een micro aangaat of tot ze opnieuw ingeschakeld wordt.
- * - Gaan alle micro's uit, dan blijft de camera staan.
+ * - Gaan alle micro's uit (en er is niet handmatig ingegrepen), dan wordt `onIdle` aangeroepen (terug naar het overzichtsbeeld).
  * @param {{follow:(mic:number)=>void, onChange?:(s:object)=>void}} o
  */
-function createTracker({ follow, onChange = () => {} }) {
+function createTracker({ follow, onChange = () => {}, onIdle = () => {} }) {
   let enabled = false;
   let paused = false;
   let order = [];
@@ -37,10 +37,12 @@ function createTracker({ follow, onChange = () => {} }) {
     update(active) {
       const fresh = active.filter((m) => !prev.includes(m));
       order = order.filter((m) => active.includes(m)).concat(fresh);
+      const wasOn = prev.length > 0;
       prev = [...active];
       if (!enabled) return;
       if (fresh.length) paused = false;
       const t = target();
+      if (t === null && wasOn && !paused) { current = null; emit(); onIdle(); return; }
       if (t === null || paused) { emit(); return; }
       if (fresh.length || t !== current) go(t); else emit();
     },

@@ -3,7 +3,8 @@ const assert = require('assert');
 const { createTracker, pickAlt } = require('../mic-track');
 
 const calls = [];
-const t = createTracker({ follow: (m) => calls.push(m) });
+let idles = 0;
+const t = createTracker({ follow: (m) => calls.push(m), onIdle: () => { idles++; } });
 
 // standaard uit
 t.update([5]); assert.deepStrictEqual(calls, []);
@@ -14,13 +15,15 @@ t.update([5, 9]); assert.deepStrictEqual(calls, [5, 9]);
 // 9 gaat uit, 5 staat nog aan: volgt het overblijvende
 t.update([5]); assert.deepStrictEqual(calls, [5, 9, 5]);
 // alles uit: camera blijft staan
-t.update([]); assert.deepStrictEqual(calls, [5, 9, 5]);
+t.update([]); assert.deepStrictEqual(calls, [5, 9, 5]); assert.strictEqual(idles, 1, 'alles uit: overzichtsbeeld');
+t.update([]); assert.strictEqual(idles, 1, 'geen herhaling');
 // zelfde micro opnieuw aan: volgt opnieuw
 t.update([5]); assert.deepStrictEqual(calls, [5, 9, 5, 5]);
 // handmatige actie pauzeert; uitgaan van een ander micro verandert niets
 t.update([5, 7]); assert.deepStrictEqual(calls.slice(-1), [7]);
 t.manual(); assert.ok(t.state().paused);
 t.update([5]); assert.strictEqual(calls.slice(-1)[0], 7, 'in pauze: geen nieuwe actie');
+t.update([]); assert.strictEqual(idles, 1, 'in pauze: geen overzichtsbeeld');
 // een nieuw micro heft de pauze op
 t.update([5, 11]); assert.strictEqual(calls.slice(-1)[0], 11); assert.ok(!t.state().paused);
 // uitzetten stopt

@@ -124,7 +124,7 @@ Instellingen: Beheer → Instellingen (aan/uit, poort, interval, optionele `cpgu
 
 Bovenaan staat de schakelaar **Micro volgen** (de Programma-knoppen 1–4 zijn weggehaald). Hij staat bij elke start uit en wordt niet bewaard; de CoCon-koppeling moet aanstaan.
 
-- De camera volgt het **laatst aangezette** micro, zoals een klik op die zitplaats (preset oproepen, dan PGM). Gaat dat micro uit terwijl er nog andere aanstaan, dan volgt de app het meest recente van de overblijvende. Gaan alle micro's uit, dan blijft de camera staan.
+- De camera volgt het **laatst aangezette** micro, zoals een klik op die zitplaats (preset oproepen, dan PGM). Gaat dat micro uit terwijl er nog andere aanstaan, dan volgt de app het meest recente van de overblijvende. Gaan alle micro's uit, dan gaat de camera na een wachttijd (standaard 5 s, instelbaar) terug naar het gekozen overzichtsbeeld (Zaal 1–4, te kiezen in Beheer → Instellingen; ook "niets doen" kan). Dat gebeurt niet na een handmatige ingreep.
 - **Handmatig ingrijpen** (klik op een plaats, joystick, preset, programma-keuze) pauzeert de tracking tot er opnieuw een micro aangaat. Naast de schakelaar staat dan "gepauzeerd".
 - **Alternatief:** staat de gevraagde camera al live, dan gebruikt de app het alternatief van de zitplaats. Is er geen, dan neemt hij de overzichtspreset (Zaal 1–4) van de eerste camera die niet de gevraagde en niet de live camera is.
 - Een micropost zonder gekoppelde zitplaats of preset wordt genegeerd (staat in het log).

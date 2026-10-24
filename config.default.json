@@ -58,6 +58,7 @@
     "pvwDest": 0,
     "thumbs": { "enabled": true, "port": 8080, "intervalMs": 3000, "pgmSrc": 5, "cpguid": "" }
   },
+  "tracking": { "overview": "zaal1", "delayMs": 5000 },
   "debug": false,
   "updateCheck": true,
   "view": "ambtenaren",
