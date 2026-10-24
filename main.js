@@ -584,7 +584,7 @@ async function brighteyeThumb(which) {
   }
   const q = new URLSearchParams({ cmd: '2', mcmd: '10', src: String(src) });
   if (t.cpguid) q.set('cpguid', t.cpguid);
-  q.set('expire', String(Date.now() + 3600000));
+  q.set('expire', String(Date.now() + 30000)); // kort geldig, zoals de webinterface zelf (wordt bij elke ophaling vernieuwd)
   const url = `http://${b.host}:${Number(t.port) || 8080}/api/?${q}`;
   // De volledige URL komt in het log (te testen in een browser), maar enkel bij de eerste poging en bij elke
   // wijziging tussen gelukt/mislukt per bron; anders vol je het log met elke verversing.
