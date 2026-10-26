@@ -9,7 +9,7 @@
 </head>
 <body>
   <header>
-    <h1>Camerabediening <span class="tag">handmatig</span></h1>
+    <h1>Camerabediening <span class="tag" id="modeTag">handmatig</span></h1>
     <nav class="tabs">
       <button data-tab="op" class="on">Bediening</button>
       <button data-tab="admin">Beheer</button>
@@ -87,6 +87,7 @@
         <button id="ptPgm">Oproepen + naar PGM</button>
       </div>
       <div class="thumbone"><img id="ptThumb" alt="" hidden><span id="ptThumbMsg" class="mute"></span></div>
+      <p id="ptUse" class="hint"></p>
       <div class="toolrow">
         <label>Koppel aan <select id="ptSeat"></select></label>
         <label>als <select id="ptKind"><option value="main">hoofdpreset</option><option value="alt">alternatief</option></select></label>
@@ -115,7 +116,10 @@
         <button type="button" id="sSave">Zetelgegevens opslaan</button>
       </details>
       <label>Camera <select name="camera"></select></label>
-      <div class="thumbone"><img id="asThumb" alt="" hidden><span id="asThumbMsg" class="mute"></span></div>
+      <div class="thumbpair">
+        <figure><img id="asThumb" alt="" hidden><figcaption>Hoofd <span id="asThumbMsg" class="mute"></span></figcaption><button type="button" id="aAF" title="Autofocus op de hoofdcamera">Autofocus</button></figure>
+        <figure><img id="asThumbAlt" alt="" hidden><figcaption>Alternatief <span id="asThumbAltMsg" class="mute"></span></figcaption><button type="button" id="aAltAF" title="Autofocus op de alternatieve camera">Autofocus</button></figure>
+      </div>
       <label>Preset (0-127) <input name="preset" type="number" min="0" max="127" required></label>
       <div class="altbox">
         <div class="alt-title">Alternatief (optioneel): wordt enkele seconden gebruikt als de hoofdcamera al live staat</div>

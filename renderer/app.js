@@ -43,6 +43,8 @@
   let micActive = [];
   /** Zetel of zaalknop die rechtsboven getoond wordt. */
   let nowId = null;
+  /** Welke variant van de getoonde plaats staat op PGM: 'main' (hoofd) of 'alt' (alternatief). */
+  let nowVar = 'main';
   /** Zetel- of zaal-id dat in de inleer-modal bewerkt wordt. */
   let editingId = null;
   /** Spiegelgegevens van de laatst getekende plan (voor het slepen van camera's). */
@@ -208,19 +210,22 @@
         (isOn ? `<button data-micoff="${s.mic}">Micro uit</button>` : `<button data-micon="${s.mic}">Micro aan</button>`) + '</div>'
       : '';
     $id('now').innerHTML = (a
-      ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}${a.alt ? `<br><span class="mute">alternatief: ${esc(camName(a.alt.camera))} · preset ${a.alt.preset}</span><br><button data-usealt="${esc(id)}" title="Nu de alternatieve camera/preset op PGM zetten (de koppeling blijft zoals ze is)">Alternatief nu</button>` : ''}`
+      ? `<b>${esc(labelOf(id))}</b>${esc(camName(a.camera))} · preset ${a.preset}${a.alt ? `<br><span class="mute">alternatief: ${esc(camName(a.alt.camera))} · preset ${a.alt.preset}</span><div class="now-var"><button data-var="main" data-id="${esc(id)}" class="${nowVar === 'main' ? 'on' : ''}" title="Hoofdcamera en -preset op PGM">Hoofd</button><button data-var="alt" data-id="${esc(id)}" class="${nowVar === 'alt' ? 'on' : ''}" title="Alternatieve camera en preset op PGM (de koppeling blijft zoals ze is)">Alternatief</button></div>` : ''}`
       : `<b>${esc(labelOf(id))}</b>Nog niet gekoppeld`) + micBtn;
   }
 
   // Micro aan/uit voor de getoonde zetel (knoppen in het blok rechtsboven)
   $id('now').addEventListener('click', async (e) => {
-    const useAlt = e.target.closest('[data-usealt]');
-    if (useAlt) {
-      const al = cfg.assign[useAlt.dataset.usealt]?.alt;
-      if (!al) return;
-      selectCamera(al.camera);
-      const r = await run(api.seatGo({ camera: al.camera, preset: al.preset }));
-      if (r.ok) toast(`Alternatief: ${camName(al.camera)} · preset ${al.preset}`);
+    const vr = e.target.closest('[data-var]');
+    if (vr) {
+      const as = cfg.assign[vr.dataset.id];
+      const v = vr.dataset.var === 'alt' ? as?.alt : as;
+      if (!v) return;
+      nowVar = vr.dataset.var;
+      setNow(vr.dataset.id);
+      selectCamera(v.camera);
+      const r = await run(api.seatGo({ camera: v.camera, preset: v.preset }));
+      if (r.ok) toast(`${nowVar === 'alt' ? 'Alternatief' : 'Hoofd'}: ${camName(v.camera)} · preset ${v.preset}`); else { nowVar = nowVar === 'alt' ? 'main' : 'alt'; setNow(vr.dataset.id); }
       return;
     }
     const on = e.target.closest('[data-micon]');
@@ -238,6 +243,7 @@
   async function pick(id) {
     if (learn) { openAssign(id); return; }
     const a = cfg.assign[id];
+    nowVar = 'main';
     setNow(id);
     if (!a) { toast(`${labelOf(id)}: nog geen camerapreset gekoppeld`); return; }
     selectCamera(a.camera);
@@ -383,7 +389,7 @@
     f.altPreset.value = a?.alt?.preset ?? '';
     document.querySelectorAll('.seat.pending').forEach((e) => e.classList.remove('pending'));
     document.querySelector(`.seat[data-id="${CSS.escape(id)}"]`)?.classList.add('pending');
-    thumbInto($id('asThumb'), $id('asThumbMsg'), Number(f.camera.value));
+    refreshAssignThumbs();
     selectCamera(Number(f.camera.value)); // de joystick rechts bestuurt meteen de camera van deze plaats
     const dlg = $id('dlgAssign');
     if (dlg.open) return; // in inleermodus blijft het venster openstaan; we hebben enkel de velden herladen
@@ -437,14 +443,14 @@
     if (f.preset.value === '') { toast('Vul een presetnummer in'); return; }
     selectCamera(Number(f.camera.value));
     run(api.preset(Number(f.camera.value), Number(f.preset.value)));
-    thumbSoon($id('asThumb'), $id('asThumbMsg'), () => Number(f.camera.value));
+    refreshAssignThumbs(1800);
   });
   $id('aAltGo').addEventListener('click', () => {
     const f = $id('formAssign');
     if (f.altCamera.value === '' || f.altPreset.value === '') { toast('Kies eerst een alternatieve camera en preset'); return; }
     selectCamera(Number(f.altCamera.value));
     run(api.preset(Number(f.altCamera.value), Number(f.altPreset.value)));
-    const ac = Number(f.altCamera.value); thumbSoon($id('asThumb'), $id('asThumbMsg'), () => ac);
+    refreshAssignThumbs(1800);
   });
   // "Hoofd ⇄ alternatief omwisselen": de twee posities verwisselen en meteen bewaren
   $id('aSwap').addEventListener('click', async () => {
@@ -453,7 +459,7 @@
     [f.camera.value, f.altCamera.value] = [f.altCamera.value, f.camera.value];
     [f.preset.value, f.altPreset.value] = [f.altPreset.value, f.preset.value];
     selectCamera(Number(f.camera.value));
-    thumbInto($id('asThumb'), $id('asThumbMsg'), Number(f.camera.value));
+    refreshAssignThumbs(1800);
     const a = assignFromForm();
     if (!a) return;
     if (!applyAssign(a)) return;
@@ -572,7 +578,7 @@
   const rowsData = () => [
     ...cfg.zaal.map((z) => ({ id: z.id, naam: z.label, fractie: 'Zaal' })),
     ...plan.seats.filter(isSpeaker).map((s) => ({ id: s.id, naam: s.naam, mic: s.mic ?? null, fractie: plan.fracties.find((f) => f.key === s.fractie && f.key !== 'geen')?.naam ?? '' })),
-  ].map((r) => ({ ...r, camera: cfg.assign[r.id]?.camera ?? null, preset: cfg.assign[r.id]?.preset ?? null }));
+  ].map((r) => ({ ...r, camera: cfg.assign[r.id]?.camera ?? null, preset: cfg.assign[r.id]?.preset ?? null, alt: cfg.assign[r.id]?.alt ?? null }));
 
   /** Maakt de DataTables-tabel (DataTables 2.x) en koppelt de knoppen "Oproepen" en "Bewerken". */
   function initTable() {
@@ -583,14 +589,15 @@
       order: [[3, 'asc']],
       language: { search: 'Zoeken:', lengthMenu: '_MENU_ per pagina', info: '_START_–_END_ van _TOTAL_', zeroRecords: 'Geen resultaten' },
       columns: [
-        { title: 'Naam', data: 'naam', width: '26%', render: (d) => esc(d) },
-        { title: 'Fractie', data: 'fractie', width: '18%', render: (d) => esc(d) },
-        { title: 'Micropost', data: 'mic', defaultContent: '', width: '11%', render: (d) => d ?? '' },
+        { title: 'Naam', data: 'naam', width: '22%', render: (d) => esc(d) },
+        { title: 'Fractie', data: 'fractie', width: '13%', render: (d) => esc(d) },
+        { title: 'Micropost', data: 'mic', defaultContent: '', width: '9%', render: (d) => d ?? '' },
         // Niet-gekoppelde rijen sorteren achteraan (99)
-        { title: 'Camera', data: 'camera', defaultContent: '', width: '14%', render: (d, t) => (d ? (t === 'display' ? esc(camName(d)) : d) : (t === 'display' ? '<span class="mute">niet gekoppeld</span>' : 99)) },
-        { title: 'Preset', data: 'preset', defaultContent: '', width: '8%', render: (d) => d ?? '' },
+        { title: 'Camera', data: 'camera', defaultContent: '', width: '12%', render: (d, t) => (d ? (t === 'display' ? esc(camName(d)) : d) : (t === 'display' ? '<span class="mute">niet gekoppeld</span>' : 99)) },
+        { title: 'Preset', data: 'preset', defaultContent: '', width: '7%', render: (d) => d ?? '' },
+        { title: 'Alternatief', data: 'alt', defaultContent: '', width: '15%', render: (d, t) => (d ? (t === 'display' ? `${esc(camName(d.camera))} · ${d.preset}` : `${d.camera}-${String(d.preset).padStart(3, '0')}`) : (t === 'display' ? '' : '99')) },
         {
-          title: '', data: null, orderable: false, searchable: false, width: '23%', className: 'acts',
+          title: '', data: null, orderable: false, searchable: false, width: '22%', className: 'acts',
           render: (_d, _t, row) => `<button data-act="go" data-id="${esc(row.id)}" ${row.camera ? '' : 'disabled'}>Oproepen</button><button data-act="edit" data-id="${esc(row.id)}">Bewerken</button>`,
         },
       ],
@@ -628,6 +635,9 @@
     const seat = s.mic != null ? plan?.seats?.find((x) => x.mic === s.mic) : null;
     $id('trackInfo').textContent = !s.enabled ? '' : s.paused ? 'gepauzeerd (handmatig) – wacht op volgend micro' : seat ? `volgt ${seat.naam}` : 'wacht op een micro';
     $id('program').classList.toggle('on', Boolean(s.enabled));
+    const tag = $id('modeTag');
+    tag.className = `tag${s.enabled ? (s.paused ? ' paused' : ' auto') : ''}`;
+    tag.textContent = !s.enabled ? 'handmatig' : s.paused ? 'handmatig (tracking gepauzeerd)' : seat ? `automatisch · ${seat.naam}` : 'automatisch';
   }
   $id('trackSw').addEventListener('change', async (e) => {
     if (e.target.checked && !(cfg.micApi?.enabled && cfg.micApi?.host)) { e.target.checked = false; toast('Zet eerst de CoCon-koppeling aan (Beheer → Instellingen)'); return; }
@@ -891,7 +901,32 @@
   });
   // Miniatuur in de preset-tool en in de koppelmodal
   $id('ptCam').addEventListener('change', () => thumbInto($id('ptThumb'), $id('ptThumbMsg'), Number($id('ptCam').value)));
-  $id('formAssign').camera.addEventListener('change', () => thumbInto($id('asThumb'), $id('asThumbMsg'), Number($id('formAssign').camera.value)));
+  /** Ververst de twee miniaturen (hoofd en alternatief) in het koppelvenster, eventueel na een wachttijd (camera moet eerst bewegen). */
+  function refreshAssignThumbs(delay = 0) {
+    const f = $id('formAssign');
+    const go = () => {
+      thumbInto($id('asThumb'), $id('asThumbMsg'), Number(f.camera.value));
+      if (f.altCamera.value !== '') thumbInto($id('asThumbAlt'), $id('asThumbAltMsg'), Number(f.altCamera.value));
+      else { $id('asThumbAlt').hidden = true; $id('asThumbAltMsg').textContent = '(geen alternatief)'; }
+    };
+    if (delay) setTimeout(go, delay); else go();
+  }
+  $id('formAssign').camera.addEventListener('change', () => refreshAssignThumbs());
+  $id('formAssign').altCamera.addEventListener('change', () => refreshAssignThumbs());
+  $id('aAF').addEventListener('click', () => { const f = $id('formAssign'); selectCamera(Number(f.camera.value)); run(api.focus(Number(f.camera.value))); refreshAssignThumbs(2500); });
+  $id('aAltAF').addEventListener('click', () => {
+    const f = $id('formAssign');
+    if (f.altCamera.value === '') { toast('Kies eerst een alternatieve camera'); return; }
+    selectCamera(Number(f.altCamera.value)); run(api.focus(Number(f.altCamera.value))); refreshAssignThumbs(2500);
+  });
+  // Klik op een miniatuur onder het plan = die camera meteen op PGM, zonder waarschuwing
+  $id('thumbs').addEventListener('click', (e) => {
+    const th = e.target.closest('.th[data-th]');
+    if (!th || th.dataset.th === 'pgm') return;
+    const id = Number(th.dataset.th);
+    selectCamera(id);
+    run(api.program(id)).then((r) => { if (r.ok) toast(`${camName(id)} naar PGM`); });
+  });
 
   // ---------- Preset uitproberen ----------
   function fillPresetTry() {
@@ -928,6 +963,19 @@
     await persist();
     toast(`${labelOf(id)}: ${kind === 'alt' ? 'alternatief' : 'hoofdpreset'} = ${camName(camera)} · preset ${preset}`);
   });
+  /** Toont of de gekozen camera+preset al aan een plaats of persoon gekoppeld is (hoofd of alternatief). */
+  function showPresetUse() {
+    const cam = Number($id('ptCam').value); const pre = Number($id('ptNum').value);
+    const uses = [];
+    for (const [id, a] of Object.entries(cfg.assign)) {
+      if (a.camera === cam && a.preset === pre) uses.push(`${labelOf(id)} (hoofd)`);
+      if (a.alt && a.alt.camera === cam && a.alt.preset === pre) uses.push(`${labelOf(id)} (alternatief)`);
+    }
+    $id('ptUse').textContent = uses.length ? `Al gekoppeld aan: ${uses.join(', ')}` : `${camName(cam)} · preset ${pre}: nog niet gekoppeld`;
+    $id('ptUse').classList.toggle('used', uses.length > 0);
+  }
+  $id('ptCam').addEventListener('change', showPresetUse);
+  $id('ptNum').addEventListener('input', showPresetUse);
   async function presetTry(target) {
     const camera = Number($id('ptCam').value);
     const preset = Number($id('ptNum').value);
@@ -965,7 +1013,7 @@
     renderPlan();
     renderZaal();
     renderCamSel();
-    renderProgram(); fillPresetTry(); fillPresetSeats(); renderThumbs();
+    renderProgram(); fillPresetTry(); fillPresetSeats(); showPresetUse(); renderThumbs();
     markActive();
     $id('debugSw').checked = Boolean(cfg.debug);
     if (!cfg.debug) banner.hidden = true;
