@@ -631,11 +631,13 @@ async function brighteyeThumb(which) {
     thumbErrCount.set(src, state === 'err' ? (thumbErrCount.get(src) || 0) + 1 : 0);
     log({ dir: state === 'ok' ? 'info' : 'err', hex: '', text: `Miniatuur ${which === 'pgm' ? 'PGM' : cam.name} (bron ${src}): ${text}\n${url}` });
   };
+  // Electron's net.fetch gebruikt dezelfde netwerkstack en proxy-instellingen als een browser (de Node-fetch deed dat niet);
+  // dat is wat in de browser wel lukt. Zonder Electron (tests) valt het terug op de gewone fetch.
+  const doFetch = (require('electron').net?.fetch || fetch).bind(require('electron').net || globalThis);
+  const why = (e) => [e.cause?.code, e.cause?.message, e.cause?.errors?.map((x) => x.code || x.message).join('/'), e.message].filter(Boolean).join(' – ');
   let res;
-  // Zoals de webinterface zelf: Referer/Origin van de BrightEye en een gewone browser-User-Agent.
-  const headers = { accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8', referer: `http://${b.host}/`, origin: `http://${b.host}`, 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36' };
-  try { res = await fetch(url, { headers, signal: AbortSignal.timeout(2500), cache: 'no-store' }); }
-  catch (e) { note('err', `geen verbinding (${e.cause?.code || e.name})`); throw new Error(`Miniatuur: geen verbinding (${e.cause?.code || e.name})`); }
+  try { res = await doFetch(url, { signal: AbortSignal.timeout(2500), cache: 'no-store' }); }
+  catch (e) { note('err', `geen verbinding (${why(e)})`); throw new Error(`Miniatuur: geen verbinding (${why(e)})`); }
   if (!res.ok) { const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200); note('err', `HTTP ${res.status} ${body}`); throw new Error(`Miniatuur: HTTP ${res.status}`); }
   const type = (res.headers.get('content-type') || '').split(';')[0];
   if (!type.startsWith('image/')) { const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200); note('err', `onverwacht antwoord (${type || 'onbekend'}) ${body}`); throw new Error(`Miniatuur: onverwacht antwoord (${type || 'onbekend'})`); }
