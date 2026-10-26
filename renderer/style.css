@@ -139,3 +139,15 @@ dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
 .thumbs .retry { align-self:center; }
 .trackSw { display:flex; gap:6px; align-items:center; cursor:pointer; }
 .program.on .trackSw { color:#7ee787; font-weight:600; }
+
+.thumbpair { display:flex; gap:12px; margin:6px 0; }
+.thumbpair figure { margin:0; flex:1; display:flex; flex-direction:column; gap:4px; }
+.thumbpair img { width:100%; aspect-ratio:16/9; object-fit:cover; border:2px solid #333; border-radius:4px; background:#111; }
+.thumbpair figcaption { font-size:12px; }
+.thumbs .th[data-th]:not([data-th="pgm"]) { cursor:pointer; }
+.thumbs .th[data-th]:not([data-th="pgm"]):hover img, .thumbs .th[data-th]:not([data-th="pgm"]):hover .ph { border-color:#7ee787; }
+.now-var { display:flex; gap:6px; margin-top:6px; }
+.now-var button.on { background:#1d4ed8; color:#fff; }
+.tag.auto { background:#14532d; color:#bbf7d0; }
+.tag.paused { background:#713f12; color:#fde68a; }
+#ptUse.used { color:#fbbf24; }
