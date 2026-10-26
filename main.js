@@ -151,6 +151,7 @@ function normalizeConfig(raw) {
   c.ipl.host = cleanHost(c.ipl.host);
   c.brighteye.host = cleanHost(c.brighteye.host);
   c.timing = { ...defaults.timing, ...c.timing };
+  c.tracking = { overview: String(c.tracking?.overview ?? defaults.tracking.overview), delayMs: Math.max(0, Number(c.tracking?.delayMs ?? defaults.tracking.delayMs) || 0) };
   c.micApi = { enabled: Boolean(c.micApi?.enabled), host: cleanHost(c.micApi?.host), port: Number(c.micApi?.port) || defaults.micApi.port };
   // Ontbrekende zaalknoppen (zaal3, zaal4 bij een oudere config) aanvullen; bestaande labels blijven.
   const haveZ = new Set((c.zaal || []).map((z) => z.id));
@@ -547,10 +548,45 @@ let micState = { active: [] };
 /** Elk CoCon-verzoek (volledige URL) en antwoord naar het verkeerslog. */
 const micTrace = (dir, text) => log({ dir, hex: '', text });
 const micFetch = () => require('./mic-api').tracedFetch(fetch, micTrace);
+/** Automatische tracking: de camera volgt het laatst aangezette micro (standaard uit, niet bewaard). */
+const { createTracker, pickAlt } = require('./mic-track');
+let idleTimer = null;
+const clearIdle = () => { clearTimeout(idleTimer); idleTimer = null; };
+const tracker = createTracker({
+  onChange: (s) => { if (!s.enabled || s.paused) clearIdle(); broadcast('track', s); },
+  // Alle micro's uit: na een korte wachttijd terug naar het gekozen overzichtsbeeld (Zaal 1–4), tenzij er intussen weer een micro aangaat.
+  onIdle: () => {
+    clearIdle();
+    const z = config.tracking?.overview;
+    const a = z && config.assign[z];
+    if (!a) return;
+    idleTimer = setTimeout(async () => {
+      idleTimer = null;
+      try {
+        log({ dir: 'info', hex: '', text: `Tracking: alle micro's uit, terug naar overzicht (${(config.zaal || []).find((x) => x.id === z)?.label || z})` });
+        await goTo({ camera: a.camera, preset: a.preset });
+      } catch (e) { log({ dir: 'err', hex: '', text: `Tracking: ${e.message}` }); }
+    }, Number(config.tracking?.delayMs ?? 5000));
+  },
+  follow: async (mic) => {
+    clearIdle();
+    try {
+      const seat = (loadPlan().seats || []).find((s) => s.mic === mic);
+      const a = seat && config.assign[seat.id];
+      if (!seat || !a) { log({ dir: 'info', hex: '', text: `Tracking: micropost ${mic} heeft geen gekoppelde zitplaats met camerapreset` }); return; }
+      const live = (config.brighteye.enabled && config.brighteye.host) ? await pgmSource() : null;
+      const alt = pickAlt(a, config.zaal || [], config.assign, live);
+      log({ dir: 'info', hex: '', text: `Tracking: micropost ${mic} = ${seat.naam}` });
+      await goTo({ camera: a.camera, preset: a.preset, alt });
+    } catch (e) { log({ dir: 'err', hex: '', text: `Tracking: ${e.message}` }); }
+  },
+});
+/** Kanalen die een mens aanstuurt: ze pauzeren de tracking tot het volgende nieuwe micro. */
+const MANUAL_CHANNELS = new Set(['seat:go', 'program:switch', 'cam:preset', 'cam:move', 'cam:zoom', 'cam:home', 'preset:try']);
 const micPoller = createPoller({
   fetchImpl: (...a) => micFetch()(...a),
   getConfig: () => ({ ...config.micApi, host: cleanHost(config.micApi?.host) }),
-  onChange: (s) => { micState = s; broadcast('mics', s); },
+  onChange: (s) => { micState = s; broadcast('mics', s); tracker.update(s.active || []); },
   log: (text, dir) => log({ dir, hex: '', text }),
 });
 
@@ -611,6 +647,8 @@ async function brighteyeThumb(which) {
 }
 
 const handlers = {
+  'track:get': () => tracker.state(),
+  'track:set': (_e, { on }) => { tracker.setEnabled(Boolean(on)); log({ dir: 'info', hex: '', text: `Tracking microposten: ${on ? 'aan' : 'uit'}` }); return tracker.state(); },
   'thumb:get': (_e, { camera }) => brighteyeThumb(camera),
   'cfg:get': () => config,
   'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); restartMicIfChanged(); return true; },
@@ -767,6 +805,7 @@ app.whenReady().then(() => {
   // Elke handler wordt verpakt zodat fouten als {ok:false, error} bij de UI aankomen en in het log verschijnen.
   for (const [ch, fn] of Object.entries(handlers)) {
     ipcMain.handle(ch, async (e, arg) => {
+      if (MANUAL_CHANNELS.has(ch)) tracker.manual();
       try { return { ok: true, data: await fn(e, arg) }; }
       catch (err) { log({ dir: 'err', hex: err.message }); return { ok: false, error: err.message }; }
     });

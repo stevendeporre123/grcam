@@ -89,6 +89,10 @@ contextBridge.exposeInMainWorld('api', {
   /** Camera naar de programma-uitgang van de BrightEye schakelen. @param {number} camera */
   /** Miniatuur van een camera of 'pgm' (data-URL). */
   thumb: (camera) => call('thumb:get', { camera }),
+  /** Automatische micro-tracking aan/uit en stand. */
+  trackGet: () => call('track:get'),
+  trackSet: (on) => call('track:set', { on }),
+  onTrack: (fn) => ipcRenderer.on('track', (_e, d) => fn(d)),
   program: (camera, target) => call('program:switch', { camera, target }),
   /** Preset uitproberen: oproepen en optioneel naar 'pvw' of 'pgm'. */
   presetTry: (camera, preset, target) => call('preset:try', { camera, preset, target }),

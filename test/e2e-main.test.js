@@ -215,6 +215,17 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
     send('0');
   }).listen(0, '127.0.0.1');
   await new Promise((r) => micSrv.on('listening', r));
+  // Tracking: micropost 12 hoort bij een zitplaats met preset; 30 heeft niets
+  const tplan = (await call('plan:get')).data;
+  const tseat = tplan.seats.find((x) => x.id);
+  tseat.mic = 12;
+  assert.ok((await call('plan:save', tplan)).ok);
+  const tcfg = (await call('cfg:get')).data;
+  tcfg.assign[tseat.id] = { camera: 3, preset: 44 };
+  assert.ok((await call('cfg:save', tcfg)).ok);
+  assert.strictEqual((await call('track:get')).data.enabled, false, 'tracking staat standaard uit');
+  assert.ok((await call('track:set', { on: true })).data.enabled);
+  logsReset();
   const mc = (await call('cfg:get')).data;
   mc.micApi = { enabled: true, host: '127.0.0.1', port: micSrv.address().port };
   assert.ok((await call('cfg:save', mc)).ok);
@@ -222,6 +233,12 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   const mics = events.filter(([c]) => c === 'mics').map(([, d]) => d.active.join(','));
   assert.deepStrictEqual(mics.slice(0, 3), ['', '12', '12,30'], JSON.stringify(mics));
   assert.deepStrictEqual((await call('mic:state')).data.active, [12, 30]);
+  assert.ok(logs().some((l) => l.text === `Tracking: micropost 12 = ${tseat.naam}`), 'tracking volgt micro 12');
+  assert.ok(logs().some((l) => /geen gekoppelde zitplaats/.test(l.text) && /micropost 30/.test(l.text)), 'micro 30 heeft geen zitplaats');
+  assert.ok(events.some(([c, d]) => c === 'track' && d.enabled && d.mic === 12));
+  await call('cam:move', { camera: 1, dir: 'stop', speed: 5 }).catch(() => {});
+  assert.ok((await call('track:get')).data.paused, 'handmatige actie pauzeert');
+  await call('track:set', { on: false });
   assert.ok((await call('mic:on', { seat: 12 })).ok);
   assert.ok((await call('mic:off', { seat: 12 })).ok);
   assert.ok((await call('mic:muteAll')).ok);

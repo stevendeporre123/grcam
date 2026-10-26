@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node test/visca.test.js && node test/plan.test.js && node test/brighteye.test.js && node test/debug-watch.test.js && node test/visca-decode.test.js && node test/data-store.test.js && node test/updater.test.js && node test/host.test.js && node test/log-format.test.js && node test/mic-api.test.js && node test/packaging.test.js",
+    "test": "node test/visca.test.js && node test/plan.test.js && node test/brighteye.test.js && node test/debug-watch.test.js && node test/visca-decode.test.js && node test/data-store.test.js && node test/updater.test.js && node test/host.test.js && node test/log-format.test.js && node test/mic-api.test.js && node test/mic-track.test.js && node test/packaging.test.js",
     "test:e2e": "node test/e2e-main.test.js",
     "dist": "electron-builder --win portable --publish never"
   },
@@ -32,6 +32,7 @@
       "data-store.js",
       "updater.js",
       "mic-api.js",
+      "mic-track.js",
       "config.default.json",
       "plan.default.json",
       "renderer/**",

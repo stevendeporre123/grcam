@@ -14,7 +14,7 @@
       <button data-tab="op" class="on">Bediening</button>
       <button data-tab="admin">Beheer</button>
     </nav>
-    <div id="program" class="program" hidden></div>
+    <div id="program" class="program"><label class="trackSw" title="De camera volgt automatisch het laatst aangezette micro. Handmatig ingrijpen pauzeert tot het volgende micro aangaat."><input type="checkbox" id="trackSw"> Micro volgen</label><span id="trackInfo" class="mute"></span></div>
     <button id="btnUpdate" class="upd" hidden></button>
     <div class="spacer"></div>
     <div class="tabs" id="viewSel" title="Richting van het plan">
@@ -149,6 +149,8 @@
         <label>Poort (TCP-besturing, standaard 5200) <input name="bPort" type="number"></label>
         <label>PGM-bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
         <label>PVW-bestemming (preview, telt vanaf 0) <input name="bPvw" type="number" min="0"></label>
+        <label>Micro volgen: overzichtsbeeld als alle micro's uit zijn <select name="trOverview"></select></label>
+        <label>Wachttijd voor het overzichtsbeeld (ms) <input name="trDelay" type="number" min="0" step="500"></label>
         <label class="chk"><input name="thEnabled" type="checkbox"> Miniaturen tonen onder het plan (webinterface BrightEye)</label>
         <label>Poort webinterface <input name="thPort" type="number" min="1" max="65535"></label>
         <label>Bronnummer van PGM in de BrightEye (miniatuur) <input name="thPgm" type="number" min="0"></label>
