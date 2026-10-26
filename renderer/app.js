@@ -645,6 +645,15 @@
     if (r.ok) showTrack(r.data); else e.target.checked = !e.target.checked;
   });
   api.onTrack(showTrack);
+  api.onActive(({ id }) => {
+    const a = cfg.assign[id];
+    if (!a) return;
+    nowVar = 'main';
+    activeId = id;
+    setNow(id);
+    selectCamera(a.camera);
+    markActive();
+  });
   api.trackGet().then((r) => { if (r.ok) showTrack(r.data); });
 
   /**
