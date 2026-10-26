@@ -920,6 +920,24 @@
     };
     if (delay) setTimeout(go, delay); else go();
   }
+  // Zolang het preset-hulpmiddel of het koppelvenster openstaat, verversen de miniaturen vanzelf (de camera heeft tijd nodig om te bewegen).
+  let liveBusy = false;
+  setInterval(async () => {
+    if (liveBusy || document.hidden || !cfg?.brighteye?.enabled) return;
+    const tools = $id('dlgTools').open; const assign = $id('dlgAssign').open;
+    if (!tools && !assign) return;
+    liveBusy = true;
+    try {
+      const jobs = [];
+      if (tools) jobs.push(thumbInto($id('ptThumb'), $id('ptThumbMsg'), Number($id('ptCam').value)));
+      if (assign) {
+        const f = $id('formAssign');
+        jobs.push(thumbInto($id('asThumb'), $id('asThumbMsg'), Number(f.camera.value)));
+        if (f.altCamera.value !== '') jobs.push(thumbInto($id('asThumbAlt'), $id('asThumbAltMsg'), Number(f.altCamera.value)));
+      }
+      await Promise.all(jobs);
+    } finally { liveBusy = false; }
+  }, Math.max(1000, Number(cfg?.brighteye?.thumbs?.intervalMs) || 2000));
   $id('formAssign').camera.addEventListener('change', () => refreshAssignThumbs());
   $id('formAssign').altCamera.addEventListener('change', () => refreshAssignThumbs());
   $id('aAF').addEventListener('click', () => { const f = $id('formAssign'); selectCamera(Number(f.camera.value)); run(api.focus(Number(f.camera.value))); refreshAssignThumbs(2500); });
@@ -998,7 +1016,7 @@
   $id('ptPgm').addEventListener('click', () => presetTry('pgm'));
   $id('btnLogWin').addEventListener('click', () => run(api.openLogWindow()));
   // Hulpmiddelen: zwevend (niet-modaal) venster zodat het log en de rest zichtbaar blijven
-  const openTools = () => { const d = $id('dlgTools'); if (!d.open) d.show(); };
+  const openTools = () => { const d = $id('dlgTools'); if (!d.open) d.show(); thumbInto($id('ptThumb'), $id('ptThumbMsg'), Number($id('ptCam').value)); };
   $id('btnTools').addEventListener('click', openTools);
   $id('btnTools2').addEventListener('click', openTools);
   $id('toolsClose').addEventListener('click', () => $id('dlgTools').close());
