@@ -92,6 +92,8 @@ contextBridge.exposeInMainWorld('api', {
   /** Automatische micro-tracking aan/uit en stand. */
   trackGet: () => call('track:get'),
   trackSet: (on) => call('track:set', { on }),
+  /** De automatische tracking koos een plaats of zaalknop (net als een klik). */
+  onActive: (fn) => ipcRenderer.on('active', (_e, d) => fn(d)),
   onTrack: (fn) => ipcRenderer.on('track', (_e, d) => fn(d)),
   program: (camera, target) => call('program:switch', { camera, target }),
   /** Preset uitproberen: oproepen en optioneel naar 'pvw' of 'pgm'. */

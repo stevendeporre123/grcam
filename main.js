@@ -563,6 +563,7 @@ const tracker = createTracker({
     idleTimer = setTimeout(async () => {
       idleTimer = null;
       try {
+        broadcast('active', { id: z });
         log({ dir: 'info', hex: '', text: `Tracking: alle micro's uit, terug naar overzicht (${(config.zaal || []).find((x) => x.id === z)?.label || z})` });
         await goTo({ camera: a.camera, preset: a.preset });
       } catch (e) { log({ dir: 'err', hex: '', text: `Tracking: ${e.message}` }); }
@@ -577,6 +578,7 @@ const tracker = createTracker({
       const live = (config.brighteye.enabled && config.brighteye.host) ? await pgmSource() : null;
       const alt = pickAlt(a, config.zaal || [], config.assign, live);
       log({ dir: 'info', hex: '', text: `Tracking: micropost ${mic} = ${seat.naam}` });
+      broadcast('active', { id: seat.id }); // de UI toont de actieve plaats en de stippellijn, zoals bij een klik
       await goTo({ camera: a.camera, preset: a.preset, alt });
     } catch (e) { log({ dir: 'err', hex: '', text: `Tracking: ${e.message}` }); }
   },

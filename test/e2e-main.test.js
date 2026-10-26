@@ -236,6 +236,7 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(logs().some((l) => l.text === `Tracking: micropost 12 = ${tseat.naam}`), 'tracking volgt micro 12');
   assert.ok(logs().some((l) => /geen gekoppelde zitplaats/.test(l.text) && /micropost 30/.test(l.text)), 'micro 30 heeft geen zitplaats');
   assert.ok(events.some(([c, d]) => c === 'track' && d.enabled && d.mic === 12));
+  assert.ok(events.some(([c, d]) => c === 'active' && d.id === tseat.id), 'tracking meldt de actieve plaats aan de UI');
   await call('cam:move', { camera: 1, dir: 'stop', speed: 5 }).catch(() => {});
   assert.ok((await call('track:get')).data.paused, 'handmatige actie pauzeert');
   await call('track:set', { on: false });
