@@ -875,7 +875,8 @@
   });
 
   // Camera op PGM en actieve microposten komen uit het main-proces
-  api.onPgm((d) => { pgmCam = d.camera ?? null; renderCamSel(); markCams(); });
+  const markThumbs = () => document.querySelectorAll('#thumbs .th[data-th]').forEach((el) => el.classList.toggle('live', pgmCam != null && el.dataset.th === String(pgmCam)));
+  api.onPgm((d) => { pgmCam = d.camera ?? null; renderCamSel(); markCams(); markThumbs(); });
   api.onMics((d) => { micActive = d.active || []; markMics(); });
 
   // Test alle camera's met een power-inquiry; antwoorden verschijnen in het verkeerslog
@@ -904,8 +905,10 @@
     clearInterval(thumbTimer);
     const on = cfg.brighteye?.enabled && cfg.brighteye.host && t?.enabled !== false;
     box.hidden = !on;
+    $id('thumbCol').hidden = !on;
+    $id('viewOp').classList.toggle('nothumbs', !on);
     if (!on) return;
-    box.innerHTML = [...cfg.cameras.map((c) => ({ id: c.id, t: c.name })), { id: 'pgm', t: 'PGM' }]
+    box.innerHTML = [{ id: 'pgm', t: 'PGM' }, ...cfg.cameras.map((c) => ({ id: c.id, t: c.name }))]
       .map((o) => `<div class="th ${o.id === 'pgm' ? 'pgm' : ''}" data-th="${o.id}"><div class="ph"></div><span>${esc(o.t)}</span></div>`).join('');
     const MAX_FOUTEN = 3; // na meer dan 3 opeenvolgende fouten stopt het ophalen van die miniatuur
     const tick = async () => {
@@ -931,6 +934,7 @@
           } else { el.title = r.error; }
         }));
       } finally { thumbBusy = false; }
+      markThumbs();
       if (!box.querySelector('.th:not(.stopped)')) { // alles gestopt: stop de timer en bied handmatig opnieuw proberen aan
         clearInterval(thumbTimer);
         if (!box.querySelector('.retry')) box.insertAdjacentHTML('beforeend', '<button type="button" class="retry" title="Miniaturen opnieuw proberen">Miniaturen gestopt na fouten — opnieuw proberen</button>');
