@@ -567,6 +567,15 @@
     });
     $id('btnHome').addEventListener('click', () => run(api.home(selCam)));
     $id('btnAF').addEventListener('click', () => run(api.focus(selCam)));
+    // Kleine bijsturingen (positie, zoom, focus) tijdens de bediening bewaren in de preset van de actieve plaats.
+    $id('btnSavePreset').addEventListener('click', async () => {
+      const a = nowId && cfg.assign[nowId];
+      const v = a && (nowVar === 'alt' ? a.alt : a);
+      if (!v) { toast('Kies eerst een plaats met een gekoppelde preset'); return; }
+      if (selCam !== v.camera) { toast(`Niet opgeslagen: de gekozen camera (${camName(selCam)}) hoort niet bij ${labelOf(nowId)} (${camName(v.camera)}). Kies die camera eerst.`); return; }
+      const r = await run(api.presetStore(v.camera, v.preset));
+      if (r.ok) toast(`Opgeslagen: ${labelOf(nowId)} (${nowVar === 'alt' ? 'alternatief' : 'hoofd'}) = ${camName(v.camera)} · preset ${v.preset}`);
+    });
   }
 
   // ---------- Beheer ----------

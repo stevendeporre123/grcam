@@ -151,3 +151,4 @@ dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
 .tag.auto { background:#14532d; color:#bbf7d0; }
 .tag.paused { background:#713f12; color:#fde68a; }
 #ptUse.used { color:#fbbf24; }
+.savepre { width:100%; margin-top:8px; }
