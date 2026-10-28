@@ -644,6 +644,7 @@
     const seat = s.mic != null ? plan?.seats?.find((x) => x.mic === s.mic) : null;
     $id('trackInfo').textContent = !s.enabled ? '' : s.paused ? 'gepauzeerd (handmatig) – wacht op volgend micro' : seat ? `volgt ${seat.naam}` : 'wacht op een micro';
     $id('program').classList.toggle('on', Boolean(s.enabled));
+    trackState = s; renderStatus();
     const tag = $id('modeTag');
     tag.className = `tag${s.enabled ? (s.paused ? ' paused' : ' auto') : ''}`;
     tag.textContent = !s.enabled ? 'handmatig' : s.paused ? 'handmatig (tracking gepauzeerd)' : seat ? `automatisch · ${seat.naam}` : 'automatisch';
@@ -653,6 +654,31 @@
     const r = await run(api.trackSet(e.target.checked));
     if (r.ok) showTrack(r.data); else e.target.checked = !e.target.checked;
   });
+  // ---------- Statusbalk ----------
+  let healthState = { cocon: {}, brighteye: {}, thumbs: {}, cams: {} };
+  let trackState = { enabled: false };
+  const dot = (ok, title = '') => `<span class="sdot ${ok === true ? 'ok' : ok === false ? 'bad' : 'off'}" title="${esc(title)}"></span>`;
+  /** Tekent de statusbalk onderaan: CoCon, camera's, BrightEye, miniaturen en tracking. */
+  function renderStatus() {
+    const bar = $id('statusbar');
+    if (!bar || !cfg) return;
+    const h = healthState;
+    const items = [];
+    const cocOn = cfg.micApi?.enabled && cfg.micApi?.host;
+    items.push(cocOn ? `<span class="si">${dot(h.cocon.ok, h.cocon.detail)}CoCon ${h.cocon.ok === true ? 'verbonden' : h.cocon.ok === false ? '<b class="bad">niet bereikbaar</b>' : 'verbinden…'}</span>` : '<span class="si mute">' + dot(null) + 'CoCon uit</span>');
+    const camDots = cfg.cameras.map((c) => { const k = h.cams?.[c.id]; return `<span class="si">${dot(k?.ok ?? null, k?.ok === false ? `${c.name}: ${k.detail}` : k?.ok ? `${c.name}: laatste opdracht gelukt` : `${c.name}: nog geen opdracht gestuurd`)}${esc(String(c.id))}</span>`; }).join('');
+    const bad = cfg.cameras.filter((c) => h.cams?.[c.id]?.ok === false);
+    items.push(`<span class="sgrp">Camera's ${camDots}${bad.length ? `<b class="bad">&nbsp;${bad.map((c) => esc(c.name)).join(', ')}: geen verbinding</b>` : ''}</span>`);
+    const beOn = cfg.brighteye?.enabled && cfg.brighteye?.host;
+    items.push(beOn ? `<span class="si">${dot(h.brighteye.ok, h.brighteye.detail)}BrightEye${h.brighteye.ok === false ? ' <b class="bad">fout</b>' : ''}${pgmCam ? ` · PGM: ${esc(camName(pgmCam))}` : ''}</span>` : '<span class="si mute">' + dot(null) + 'BrightEye uit</span>');
+    if (beOn && cfg.brighteye?.thumbs?.enabled !== false) items.push(`<span class="si">${dot(h.thumbs.ok, h.thumbs.detail)}Miniaturen${h.thumbs.ok === false ? ' <b class="bad">fout</b>' : ''}</span>`);
+    const seat = trackState.mic != null ? plan?.seats?.find((x) => x.mic === trackState.mic) : null;
+    items.push(`<span class="si">${trackState.enabled ? (trackState.paused ? '<span class="sdot warn"></span>Tracking gepauzeerd' : `<span class="sdot ok"></span>Tracking aan${seat ? `: ${esc(seat.naam)}` : ''}`) : '<span class="sdot off"></span>Tracking uit'}</span>`);
+    bar.innerHTML = items.join('');
+    bar.classList.toggle('alarm', Boolean(trackState.enabled && (h.cocon.ok === false || bad.length > 0 || h.brighteye.ok === false)));
+  }
+  api.onHealth((d) => { healthState = d; renderStatus(); });
+  api.healthGet().then((r) => { if (r.ok) { healthState = r.data; renderStatus(); } });
   api.onTrack(showTrack);
   api.onActive(({ id }) => {
     const a = cfg.assign[id];
@@ -717,6 +743,7 @@
     f.bPvw.value = cfg.brighteye.pvwDest ?? 0;
     f.trOverview.innerHTML = '<option value="">— niets doen —</option>' + (cfg.zaal || []).map((z) => `<option value="${esc(z.id)}">${esc(z.label)}</option>`).join('');
     f.trOverview.value = cfg.tracking?.overview ?? '';
+    f.trAuto.checked = Boolean(cfg.tracking?.autoStart);
     f.trDelay.value = cfg.tracking?.delayMs ?? 5000;
     const th = cfg.brighteye.thumbs || {};
     f.thEnabled.checked = th.enabled !== false; f.thPort.value = th.port || 8080; f.thMs.value = th.intervalMs || 3000; f.thPgm.value = th.pgmSrc ?? 5; f.thGuid.value = th.cpguid || '';
@@ -731,7 +758,7 @@
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
-    cfg.tracking = { overview: f.trOverview.value, delayMs: Math.max(0, Number(f.trDelay.value) || 0) };
+    cfg.tracking = { autoStart: f.trAuto.checked, overview: f.trOverview.value, delayMs: Math.max(0, Number(f.trDelay.value) || 0) };
     cfg.brighteye.thumbs = { enabled: f.thEnabled.checked, port: Number(f.thPort.value) || 8080, intervalMs: Math.max(1000, Number(f.thMs.value) || 3000), pgmSrc: Number(f.thPgm.value) || 0, cpguid: f.thGuid.value.trim() };
     cfg.timing = { takeDelayMs: Number(f.tTake.value) || 0, altHoldMs: Number(f.tAlt.value) || 0 };
     cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 };
@@ -1049,7 +1076,7 @@
     renderPlan();
     renderZaal();
     renderCamSel();
-    renderProgram(); fillPresetTry(); fillPresetSeats(); showPresetUse(); renderThumbs();
+    renderProgram(); fillPresetTry(); fillPresetSeats(); showPresetUse(); renderThumbs(); renderStatus();
     markActive();
     $id('debugSw').checked = Boolean(cfg.debug);
     if (!cfg.debug) banner.hidden = true;

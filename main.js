@@ -151,7 +151,7 @@ function normalizeConfig(raw) {
   c.ipl.host = cleanHost(c.ipl.host);
   c.brighteye.host = cleanHost(c.brighteye.host);
   c.timing = { ...defaults.timing, ...c.timing };
-  c.tracking = { overview: String(c.tracking?.overview ?? defaults.tracking.overview), delayMs: Math.max(0, Number(c.tracking?.delayMs ?? defaults.tracking.delayMs) || 0) };
+  c.tracking = { autoStart: Boolean(c.tracking?.autoStart), overview: String(c.tracking?.overview ?? defaults.tracking.overview), delayMs: Math.max(0, Number(c.tracking?.delayMs ?? defaults.tracking.delayMs) || 0) };
   c.micApi = { enabled: Boolean(c.micApi?.enabled), host: cleanHost(c.micApi?.host), port: Number(c.micApi?.port) || defaults.micApi.port };
   // Ontbrekende zaalknoppen (zaal3, zaal4 bij een oudere config) aanvullen; bestaande labels blijven.
   const haveZ = new Set((c.zaal || []).map((z) => z.id));
@@ -299,8 +299,14 @@ function getSocket(host, port, camId) {
  */
 async function sendVisca(camId, buf) {
   const cam = camById(camId);
-  const entry = await getSocket(config.ipl.host, cam.port, cam.id);
-  await new Promise((res, rej) => entry.sock.write(buf, (e) => (e ? rej(e) : res())));
+  try {
+    const entry = await getSocket(config.ipl.host, cam.port, cam.id);
+    await new Promise((res, rej) => entry.sock.write(buf, (e) => (e ? rej(e) : res())));
+    setHealth('cam', true, '', cam.id);
+    return await finishSend(entry, cam, buf);
+  } catch (e) { setHealth('cam', false, e.message, cam.id); throw e; }
+}
+async function finishSend(entry, cam, buf) {
   logTx(cam.id, buf);
   clearTimeout(entry.timer);
   // In debugmodus blijven de verbindingen open zodat we ook berichten van de automatisering zien.
@@ -379,6 +385,21 @@ function brighteyeError(e) {
  * @throws {Error} met een leesbare melding
  */
 let beQueue = Promise.resolve();
+
+/**
+ * Gezondheid van de koppelingen voor de statusbalk. `ok` true/false, of null = onbekend of uitgeschakeld.
+ * Er wordt nooit extra verkeer naar de camera's gestuurd om dit te weten (de NI-700 zou erop reageren):
+ * een camera is "gelukt" of "mislukt" naargelang het laatste echte commando.
+ */
+const health = { cocon: { ok: null, detail: '' }, brighteye: { ok: null, detail: '' }, thumbs: { ok: null, detail: '' }, cams: {} };
+let healthTimer = null;
+function setHealth(kind, ok, detail = '', camId) {
+  const slot = kind === 'cam' ? (health.cams[camId] = health.cams[camId] || {}) : health[kind];
+  if (slot.ok === ok && slot.detail === detail) return;
+  slot.ok = ok; slot.detail = detail;
+  clearTimeout(healthTimer);
+  healthTimer = setTimeout(() => broadcast('health', health), 150);
+}
 async function brighteyeExchange(cmd, camera) {
   const b = config.brighteye;
   if (!b.enabled || !b.host) throw new Error('Brighteye-koppeling is niet ingesteld (Beheer → Instellingen)');
@@ -403,8 +424,10 @@ async function brighteyeExchange(cmd, camera) {
     const turn = beQueue.then(run, run);
     beQueue = turn.catch(() => {});
     await turn;
+    setHealth('brighteye', true);
   } catch (e) {
     const msg = brighteyeError(e);
+    setHealth('brighteye', false, msg);
     log({ dir: 'err', camera, hex: `brighteye: ${JSON.stringify(cmd)}`, text: msg });
     throw new Error(msg);
   }
@@ -589,6 +612,7 @@ const micPoller = createPoller({
   fetchImpl: (...a) => micFetch()(...a),
   getConfig: () => ({ ...config.micApi, host: cleanHost(config.micApi?.host) }),
   onChange: (s) => { micState = s; broadcast('mics', s); tracker.update(s.active || []); },
+  onStatus: (ok, detail) => setHealth('cocon', ok, detail),
   log: (text, dir) => log({ dir, hex: '', text }),
 });
 
@@ -639,16 +663,18 @@ async function brighteyeThumb(which) {
   const why = (e) => [e.cause?.code, e.cause?.message, e.cause?.errors?.map((x) => x.code || x.message).join('/'), e.message].filter(Boolean).join(' – ');
   let res;
   try { res = await doFetch(url, { signal: AbortSignal.timeout(2500), cache: 'no-store' }); }
-  catch (e) { note('err', `geen verbinding (${why(e)})`); throw new Error(`Miniatuur: geen verbinding (${why(e)})`); }
+  catch (e) { note('err', `geen verbinding (${why(e)})`); setHealth('thumbs', false, why(e)); throw new Error(`Miniatuur: geen verbinding (${why(e)})`); }
   if (!res.ok) { const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200); note('err', `HTTP ${res.status} ${body}`); throw new Error(`Miniatuur: HTTP ${res.status}`); }
   const type = (res.headers.get('content-type') || '').split(';')[0];
   if (!type.startsWith('image/')) { const body = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200); note('err', `onverwacht antwoord (${type || 'onbekend'}) ${body}`); throw new Error(`Miniatuur: onverwacht antwoord (${type || 'onbekend'})`); }
   const buf = Buffer.from(await res.arrayBuffer());
   note('ok', 'gelukt');
+  setHealth('thumbs', true);
   return { src, camera: cam ? cam.id : pgmCam, image: `data:${type};base64,${buf.toString('base64')}` };
 }
 
 const handlers = {
+  'health:get': () => health,
   'track:get': () => tracker.state(),
   'track:set': (_e, { on }) => { tracker.setEnabled(Boolean(on)); log({ dir: 'info', hex: '', text: `Tracking microposten: ${on ? 'aan' : 'uit'}` }); return tracker.state(); },
   'thumb:get': (_e, { camera }) => brighteyeThumb(camera),
@@ -814,6 +840,8 @@ app.whenReady().then(() => {
   }
   createWindow();
   restartMicIfChanged();
+  // Na een (her)start meteen weer micro's volgen als dat zo ingesteld is.
+  if (config.tracking?.autoStart && config.micApi?.enabled) { tracker.setEnabled(true); log({ dir: 'info', hex: '', text: 'Tracking microposten: aan (automatisch bij opstarten)' }); }
   // Stille controle op een nieuwe versie (uitschakelbaar in de instellingen). Installeert nooit vanzelf.
   setTimeout(async () => {
     if (config.updateCheck === false) return;

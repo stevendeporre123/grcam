@@ -90,6 +90,8 @@ contextBridge.exposeInMainWorld('api', {
   /** Miniatuur van een camera of 'pgm' (data-URL). */
   thumb: (camera) => call('thumb:get', { camera }),
   /** Automatische micro-tracking aan/uit en stand. */
+  healthGet: () => call('health:get'),
+  onHealth: (fn) => ipcRenderer.on('health', (_e, d) => fn(d)),
   trackGet: () => call('track:get'),
   trackSet: (on) => call('track:set', { on }),
   /** De automatische tracking koos een plaats of zaalknop (net als een klik). */

@@ -71,6 +71,7 @@
     </section>
   </main>
 
+  <footer id="statusbar" class="statusbar" aria-label="Status van de koppelingen"></footer>
   <div id="toast" role="status"></div>
 
   <dialog id="dlgTools" class="floating tools">
@@ -154,6 +155,7 @@
         <label>Poort (TCP-besturing, standaard 5200) <input name="bPort" type="number"></label>
         <label>PGM-bestemming (uitgang naar de encoder, telt vanaf 0) <input name="bDest" type="number" min="0"></label>
         <label>PVW-bestemming (preview, telt vanaf 0) <input name="bPvw" type="number" min="0"></label>
+        <label class="chk"><input name="trAuto" type="checkbox"> Micro volgen automatisch aanzetten bij het opstarten van de app</label>
         <label>Micro volgen: overzichtsbeeld als alle micro's uit zijn <select name="trOverview"></select></label>
         <label>Wachttijd voor het overzichtsbeeld (ms) <input name="trDelay" type="number" min="0" step="500"></label>
         <label class="chk"><input name="thEnabled" type="checkbox"> Miniaturen tonen onder het plan (webinterface BrightEye)</label>

@@ -128,7 +128,7 @@ async function probe(c, fetchImpl = fetch) {
  * @param {number} [o.minGapMs=200]  minimale tijd tussen twee verzoeken
  * @param {number} [o.maxBackoffMs=30000]
  */
-function createPoller({ getConfig, onChange, log, fetchImpl = fetch, pollTimeoutMs = 45000, minGapMs = 200, maxBackoffMs = 30000 }) {
+function createPoller({ getConfig, onChange, log, onStatus = () => {}, fetchImpl = fetch, pollTimeoutMs = 45000, minGapMs = 200, maxBackoffMs = 30000 }) {
   let running = false;
   let gen = 0;
   let ctrlSession = null; // { base, id } van de lopende sessie
@@ -171,8 +171,10 @@ function createPoller({ getConfig, onChange, log, fetchImpl = fetch, pollTimeout
         const st = /Error 408/.test(text) ? null : parseMicState(text);
         if (st) emit(st);
         errLogged = false; backoff = 2000;
+        onStatus(true, '');
       } catch (e) {
         if (!running || my !== gen) break;
+        if (e.name !== 'AbortError') onStatus(false, e.message);
         if (e.name === 'AbortError') { id = null; ctrlSession = null; continue; } // geen antwoord: sessie opnieuw opzetten
         if (!errLogged) { log(`CoCon API niet bereikbaar of onbruikbaar: ${e.message}; nieuwe pogingen op de achtergrond`, 'err'); errLogged = true; }
         await new Promise((r) => setTimeout(r, backoff));
@@ -199,7 +201,7 @@ function createPoller({ getConfig, onChange, log, fetchImpl = fetch, pollTimeout
       loop(++gen);
     },
     stop() {
-      running = false; gen++;
+      running = false; gen++; onStatus(null, '');
       disconnect();
       if (last !== null) { last = null; onChange({ active: [] }); }
     },
