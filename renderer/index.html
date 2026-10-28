@@ -102,6 +102,25 @@
       <div class="btnrow"><button id="btnPing">Test alle camera's</button></div>
       <label class="dbg chk" title="Houdt de IPL-verbindingen open en stuurt na elk camera-antwoord een extra vraag naar de camera. Let op: dit verkeer ziet ook de NI-700; zet het niet aan tijdens een zitting."><input type="checkbox" id="debugSw"> Debug: laatste preset tonen (niet tijdens een zitting)</label>
     </section>
+    <section>
+      <h4>Presets exporteren / importeren</h4>
+      <p class="hint">Bewaar de presets van een camera (positie, zoom, focus) in een bestand en zet ze op een vervangcamera terug. Beeldinstellingen zoals belichting of witbalans zitten niet in een preset en moeten op de nieuwe camera apart ingesteld worden. De camera's bewegen tijdens dit werk: niet tijdens een zitting.</p>
+      <div class="toolrow">
+        <label>Camera <select id="pioCam"></select></label>
+        <label title="Naast de gekoppelde presets, bv. 1-20, 100">Extra presets <input id="pioExtra" type="text" placeholder="bv. 1-20, 100"></label>
+        <label>Formaat <select id="pioFmt"><option value="json">JSON</option><option value="csv">CSV</option></select></label>
+      </div>
+      <div class="btnrow">
+        <button id="pioExport">Exporteren…</button>
+        <button id="pioOpen">Importeren…</button>
+      </div>
+      <div id="pioMap" hidden>
+        <p id="pioInfo" class="hint"></p>
+        <div id="pioRows"></div>
+        <div class="btnrow"><button id="pioGo">Importeren starten</button><button id="pioCancel">Annuleren</button></div>
+      </div>
+      <p id="pioStatus" class="hint"></p>
+    </section>
     <menu><button type="button" id="toolsClose">Sluiten</button></menu>
   </dialog>
 

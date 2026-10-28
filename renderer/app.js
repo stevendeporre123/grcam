@@ -995,6 +995,52 @@
     run(api.program(id)).then((r) => { if (r.ok) toast(`${camName(id)} naar PGM`); });
   });
 
+  // ---------- Presets exporteren / importeren ----------
+  let pioFile = null;
+  const pioStatus = (t) => { $id('pioStatus').textContent = t; };
+  api.onPresetIoProgress((d) => { if (d.text) pioStatus(d.text); });
+  function fillPresetIo() {
+    const sel = $id('pioCam');
+    const cur = sel.value;
+    sel.innerHTML = `<option value="all">Alle camera's</option>${cfg.cameras.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}`;
+    if (cur) sel.value = cur;
+  }
+  $id('pioExport').addEventListener('click', async () => {
+    const v = $id('pioCam').value;
+    pioStatus('Bezig met uitlezen…');
+    const r = await run(api.presetIoExport(v === 'all' ? 'all' : [Number(v)], $id('pioExtra').value, $id('pioFmt').value));
+    pioStatus(r.ok ? (r.data.canceled ? '' : `Klaar: ${r.data.count} presets bewaard in ${r.data.file}`) : '');
+    if (r.ok && !r.data.canceled) toast(`${r.data.count} presets geëxporteerd`);
+  });
+  $id('pioOpen').addEventListener('click', async () => {
+    const r = await run(api.presetIoOpen());
+    if (!r.ok || r.data.canceled) return;
+    pioFile = r.data.file;
+    const d = r.data;
+    $id('pioInfo').textContent = `${d.presets.length} presets in het bestand. Kies per camera uit het bestand naar welke camera ze gaan; bestaande presets met hetzelfde nummer worden overschreven.`;
+    $id('pioRows').innerHTML = d.cameras.map((c) => {
+      const n = d.presets.filter((p) => p.camera === c.id).length;
+      const opts = `<option value="">— overslaan —</option>${d.targets.map((t) => `<option value="${t.id}"${t.id === c.id ? ' selected' : ''}>${esc(t.name)}</option>`).join('')}`;
+      return `<div class="toolrow"><span>${esc(c.name)} (${n} presets) →</span><select data-pio="${c.id}">${opts}</select></div>`;
+    }).join('');
+    $id('pioMap').hidden = false;
+  });
+  $id('pioCancel').addEventListener('click', () => { $id('pioMap').hidden = true; pioFile = null; });
+  $id('pioGo').addEventListener('click', async () => {
+    const map = {};
+    $id('pioRows').querySelectorAll('select[data-pio]').forEach((s) => { map[s.dataset.pio] = s.value; });
+    const names = Object.entries(map).filter(([, to]) => to).map(([, to]) => camName(Number(to)));
+    if (!names.length) { toast('Kies minstens één doelcamera'); return; }
+    if (!confirm(`Presets naar ${names.join(', ')} schrijven? Bestaande presets met hetzelfde nummer worden overschreven en de camera beweegt.`)) return;
+    $id('pioMap').hidden = true;
+    pioStatus('Bezig met schrijven…');
+    const r = await run(api.presetIoImport(pioFile, map));
+    if (r.ok) {
+      pioStatus(`Klaar: ${r.data.stored} presets opgeslagen${r.data.warnings.length ? `. Let op: ${r.data.warnings.length} waarschuwing(en), zie het log.` : '.'}`);
+      toast(`${r.data.stored} presets geïmporteerd`);
+    } else pioStatus('');
+  });
+
   // ---------- Preset uitproberen ----------
   function fillPresetTry() {
     const sel = $id('ptCam');
@@ -1080,7 +1126,7 @@
     renderPlan();
     renderZaal();
     renderCamSel();
-    renderProgram(); fillPresetTry(); fillPresetSeats(); showPresetUse(); renderThumbs(); renderStatus();
+    renderProgram(); fillPresetTry(); fillPresetIo(); fillPresetSeats(); showPresetUse(); renderThumbs(); renderStatus();
     markActive();
     $id('debugSw').checked = Boolean(cfg.debug);
     if (!cfg.debug) banner.hidden = true;

@@ -128,3 +128,13 @@ Bovenaan staat de schakelaar **Micro volgen** (de Programma-knoppen 1–4 zijn w
 - **Handmatig ingrijpen** (klik op een plaats, joystick, preset, programma-keuze) pauzeert de tracking tot er opnieuw een micro aangaat. Naast de schakelaar staat dan "gepauzeerd".
 - **Alternatief:** staat de gevraagde camera al live, dan gebruikt de app het alternatief van de zitplaats. Is er geen, dan neemt hij de overzichtspreset (Zaal 1–4) van de eerste camera die niet de gevraagde en niet de live camera is.
 - Een micropost zonder gekoppelde zitplaats of preset wordt genegeerd (staat in het log).
+
+## Presets exporteren en importeren (camera vervangen)
+
+Hulpmiddelen → *Presets exporteren / importeren*. Bedoeld om alle presets van een kapotte camera over te zetten naar een vervangcamera.
+
+- **Exporteren**: kies een camera (of alle camera's). Standaard gaat het om de presets die aan een plaats of zaalknop gekoppeld zijn (hoofd én alternatief); met *Extra presets* (bv. `1-20, 100`) neem je er andere bij. De app roept elke preset op, wacht tot de camera stilstaat en leest pan/tilt, zoom, focuspositie en focusmodus uit. Bestand: JSON of CSV (naar keuze in het opslagvenster; CSV opent in Excel met `,` of `;`).
+- **Importeren**: kies het bestand en wijs per camera uit het bestand een doelcamera toe (of sla ze over). Per preset stelt de app de stand in, controleert ze (afwijkingen komen als waarschuwing in het log) en slaat ze op in de camera. Bestaande presets met hetzelfde nummer worden overschreven.
+- De tool weigert te werken als *Micro volgen* aan staat of als een doelcamera live op PGM staat. De camera's bewegen, dus gebruik dit buiten een zitting.
+- **Beperking**: enkel wat VISCA kan uitlezen zit erin (pan/tilt, zoom, focus). Belichting, witbalans en andere beeldinstellingen horen niet bij een VISCA-preset en moeten op de nieuwe camera apart ingesteld worden.
+- Niet geverifieerd op echte Lumens-hardware: antwoorden op de positie-inquiries, de wachttijd tot de camera stilstaat en het terugzetten van de focus. Test eerst met één preset.

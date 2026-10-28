@@ -307,6 +307,54 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(logEvents.some(([c]) => c === 'log'), 'het logvenster krijgt ook de regels');
   assert.ok(!JSON.parse(fs.readFileSync(path.join(userData, 'config.json'), 'utf8')).debug, 'debug wordt niet bewaard');
 
+  // 4e. Presets exporteren en op een andere camera terugzetten (nep-IPL houdt pan/tilt/zoom/focus bij)
+  process.env.GRCAM_SETTLE_MS = '5';
+  const pc = (await call('cfg:get')).data;
+  pc.brighteye.enabled = false;
+  pc.assign = { z1: { camera: 1, preset: 5, alt: { camera: 4, preset: 8 } } };
+  await call('cfg:save', pc);
+  for (const [cam, pan, tilt, zoom] of [[1, -500, 120, 7000], [4, 40, -30, 100]]) {
+    const a = 0x80 | 1;
+    const sock = net.connect(2002 + cam, '127.0.0.1');
+    await new Promise((r) => sock.once('connect', r));
+    sock.write(Buffer.concat([
+      Buffer.from([a, 0x01, 0x06, 0x02, 20, 20, ...[pan, tilt].flatMap((v) => [(v >> 12) & 15, (v >> 8) & 15, (v >> 4) & 15, v & 15]), 0xff]),
+      Buffer.from([a, 0x01, 0x04, 0x47, (zoom >> 12) & 15, (zoom >> 8) & 15, (zoom >> 4) & 15, zoom & 15, 0xff]),
+      Buffer.from([a, 0x01, 0x04, 0x3f, 0x01, cam === 1 ? 5 : 8, 0xff]),
+    ]));
+    await sleep(150);
+    sock.destroy();
+  }
+  await call('track:set', { on: true });
+  assert.ok(!(await call('presetio:export', { cameras: [1], file: path.join(tmp, 'x.json') })).ok, 'met tracking aan geweigerd');
+  await call('track:set', { on: false });
+  const outJson = path.join(tmp, 'presets.json');
+  const outCsv = path.join(tmp, 'presets.csv');
+  const ex = await call('presetio:export', { cameras: 'all', extra: '', file: outJson });
+  assert.ok(ex.ok, JSON.stringify(ex));
+  assert.strictEqual(ex.data.count, 2);
+  const exported = JSON.parse(fs.readFileSync(outJson, 'utf8'));
+  assert.strictEqual(exported.app, 'grcam-presets');
+  const p5 = exported.presets.find((p) => p.camera === 1 && p.preset === 5);
+  assert.deepStrictEqual([p5.pan, p5.tilt, p5.zoom], [-500, 120, 7000]);
+  assert.ok(p5.usedBy.length, 'gekoppelde plaats staat erbij');
+  assert.ok((await call('presetio:export', { cameras: [1], extra: '5-6', file: outCsv })).ok);
+  assert.ok(/^camera,cameraNaam,preset,pan,tilt,zoom,focus,focusModus,gebruiktDoor/.test(fs.readFileSync(outCsv, 'utf8')));
+  assert.ok(!(await call('presetio:export', { cameras: [1], extra: 'abc', file: outCsv })).ok, 'ongeldig bereik');
+  // import: camera 1 uit het bestand -> camera 2 (nog leeg), daarna uitlezen via export op camera 2
+  const op = await call('presetio:open', { file: outJson });
+  assert.ok(op.ok && op.data.presets.length === 2 && op.data.targets.length === 4);
+  const im = await call('presetio:import', { file: outJson, map: { 1: 2 } });
+  assert.ok(im.ok && im.data.stored === 1 && im.data.warnings.length === 0, JSON.stringify(im));
+  const pc2 = (await call('cfg:get')).data;
+  pc2.assign = { z1: { camera: 2, preset: 5 } };
+  await call('cfg:save', pc2);
+  const back = path.join(tmp, 'back.json');
+  assert.ok((await call('presetio:export', { cameras: [2], file: back })).ok);
+  const b5 = JSON.parse(fs.readFileSync(back, 'utf8')).presets[0];
+  assert.deepStrictEqual([b5.pan, b5.tilt, b5.zoom], [-500, 120, 7000], 'preset staat nu ook op camera 2');
+  assert.ok(!(await call('presetio:import', { file: outJson, map: { 1: 2, 4: 2 } })).ok, 'dubbele doelcamera geweigerd');
+
   // 5. Debug uit: lastPreset niet meer toegestaan
   bad.debug = false;
   await call('cfg:save', bad);

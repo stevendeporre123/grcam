@@ -25,6 +25,7 @@ const { createPoller } = require('./mic-api');
 const store = require('./data-store');
 const { cleanHost } = require('./host');
 const updater = require('./updater');
+const presetio = require('./preset-io');
 
 /** GitHub-repository waaruit updates komen (publieke releases). */
 const REPO = 'stevendeporre123/grcam';
@@ -259,7 +260,7 @@ function getSocket(host, port, camId) {
 
   return new Promise((resolve, reject) => {
     const sock = net.createConnection({ host, port });
-    const entry = { sock, timer: null };
+    const entry = { sock, timer: null, waiters: [] };
     sock.setNoDelay(true);
     sock.setKeepAlive(true, 5000); // een wegvallende verbinding sneller opmerken
     sock.setTimeout(3000, () => sock.destroy(new Error(`Time-out bij verbinden met ${key}`)));
@@ -277,6 +278,7 @@ function getSocket(host, port, camId) {
       for (const m of r.messages) {
         log({ dir: 'rx', camera: camId, hex: visca.toHex(m), text: describe(m, lastQuery.get(camId)) });
         watcher.feed(camId, m);
+        for (const w of [...entry.waiters]) { const v = w.parse(m); if (v !== null && v !== undefined) { entry.waiters.splice(entry.waiters.indexOf(w), 1); w.resolve(v); } }
       }
       clearTimeout(flush);
       if (carry.length) {
@@ -311,6 +313,37 @@ async function finishSend(entry, cam, buf) {
   clearTimeout(entry.timer);
   // In debugmodus blijven de verbindingen open zodat we ook berichten van de automatisering zien.
   if (!config.debug) entry.timer = setTimeout(() => entry.sock.destroy(), config.ipl.idleCloseMs);
+}
+
+/**
+ * Stuurt een VISCA-inquiry en wacht op het antwoord dat `parse` herkent (geeft null terug voor andere berichten).
+ * @template T
+ * @param {number} camId
+ * @param {Buffer} buf
+ * @param {(m:Buffer)=>T|null} parse
+ * @param {number} [timeoutMs=2000]
+ * @returns {Promise<T>}
+ */
+async function viscaQuery(camId, buf, parse, timeoutMs = 2000) {
+  const cam = camById(camId);
+  const entry = await getSocket(config.ipl.host, cam.port, cam.id);
+  clearTimeout(entry.timer); // niet sluiten tijdens het wachten
+  const waiter = { parse };
+  const answer = new Promise((resolve, reject) => {
+    waiter.resolve = resolve;
+    waiter.timer = setTimeout(() => {
+      const i = entry.waiters.indexOf(waiter); if (i >= 0) entry.waiters.splice(i, 1);
+      reject(new Error(`${cam.name}: geen antwoord op ${visca.toHex(buf)}`));
+    }, timeoutMs);
+  });
+  entry.waiters.push(waiter);
+  try {
+    await new Promise((res, rej) => entry.sock.write(buf, (e) => (e ? rej(e) : res())));
+    setHealth('cam', true, '', cam.id);
+    await finishSend(entry, cam, buf);
+    return await answer;
+  } catch (e) { setHealth('cam', false, e.message, cam.id); throw e; }
+  finally { clearTimeout(waiter.timer); }
 }
 
 /** Opent (indien nodig) permanente verbindingen naar alle camerapoorten; fouten komen in het log. */
@@ -673,7 +706,95 @@ async function brighteyeThumb(which) {
   return { src, camera: cam ? cam.id : pgmCam, image: `data:${type};base64,${buf.toString('base64')}` };
 }
 
+/** Eén export/import tegelijk; de camera's worden door dit hulpmiddel bewogen. */
+let presetBusy = false;
+const pio = () => presetio.createPresetIO({
+  send: (cam, buf) => sendVisca(cam, buf),
+  query: viscaQuery,
+  addrOf: (cam) => camById(cam).viscaAddr,
+  nameOf: (cam) => camById(cam).name,
+  log: (msg, cam) => log({ dir: 'info', camera: cam, hex: '', text: msg }),
+  settleMs: Number(process.env.GRCAM_SETTLE_MS) || 400,
+});
+/** Weigert werk dat camera's beweegt als tracking aan staat of een doelcamera live is. */
+async function presetGuard(camIds) {
+  if (presetBusy) throw new Error('Er loopt al een import of export');
+  if (tracker.state().enabled) throw new Error("Zet 'Micro volgen' eerst uit: dit hulpmiddel verplaatst de camera's");
+  if (config.brighteye.enabled && config.brighteye.host) {
+    const live = await pgmSource();
+    if (live !== null && camIds.includes(live)) throw new Error(`${camById(live).name} staat live op PGM: kies eerst een andere camera op PGM`);
+  }
+}
+const seatLabel = (id) => { try { const x = loadPlan().seats.find((q) => q.id === id); return x ? [x.naam, x.regel2].filter(Boolean).join(' – ') : id; } catch { return id; } };
+
 const handlers = {
+  'presetio:export': async (_e, { cameras, extra, format, file }) => {
+    const ids = (cameras === 'all' ? config.cameras.map((c) => c.id) : [].concat(cameras)).map(Number);
+    if (!ids.length) throw new Error('Kies een camera');
+    await presetGuard(ids);
+    const extras = presetio.parseRange(extra);
+    const linked = presetio.linkedPresets(config, seatLabel);
+    const plan = ids.map((id) => ({ id, presets: [...new Set([...(linked.get(id) ? [...linked.get(id).keys()] : []), ...extras])].sort((a, b) => a - b) }));
+    const total = plan.reduce((n, p) => n + p.presets.length, 0);
+    if (!total) throw new Error('Geen presets om te exporteren: er zijn geen koppelingen en geen extra bereik opgegeven');
+    const fmt = format === 'csv' || /\.csv$/i.test(file || '') ? 'csv' : 'json';
+    let target = file;
+    if (!target) {
+      const { dialog } = require('electron');
+      const r = await dialog.showSaveDialog(win, { title: 'Presets exporteren', defaultPath: `presets-${new Date().toISOString().slice(0, 10)}.${fmt}`, filters: [{ name: 'JSON', extensions: ['json'] }, { name: 'CSV', extensions: ['csv'] }] });
+      if (r.canceled || !r.filePath) return { canceled: true };
+      target = r.filePath;
+    }
+    presetBusy = true;
+    try {
+      const io = pio();
+      const rows = [];
+      let base = 0;
+      for (const p of plan) {
+        rows.push(...await io.exportCamera(p.id, p.presets, linked.get(p.id) || new Map(), (x) => broadcast('presetio:progress', { text: `${camById(x.camera).name}: preset ${x.preset ?? '-'} (${base + x.done}/${total})` })));
+        base += p.presets.length;
+      }
+      const data = { cameras: ids.map((id) => ({ id, name: camById(id).name })), presets: rows };
+      fs.writeFileSync(target, presetio.serialize(data, /\.csv$/i.test(target) ? 'csv' : 'json'));
+      log({ dir: 'info', hex: '', text: `Presets geëxporteerd: ${rows.length} naar ${target}` });
+      return { file: target, count: rows.length };
+    } finally { presetBusy = false; broadcast('presetio:progress', { text: '' }); }
+  },
+  'presetio:open': async (_e, { file }) => {
+    let target = file;
+    if (!target) {
+      const { dialog } = require('electron');
+      const r = await dialog.showOpenDialog(win, { title: 'Presets importeren', properties: ['openFile'], filters: [{ name: 'Presets', extensions: ['json', 'csv'] }] });
+      if (r.canceled || !r.filePaths[0]) return { canceled: true };
+      target = r.filePaths[0];
+    }
+    const data = presetio.parse(fs.readFileSync(target, 'utf8'));
+    return { file: target, ...data, targets: config.cameras.map((c) => ({ id: c.id, name: c.name })) };
+  },
+  'presetio:import': async (_e, { file, map }) => {
+    const data = presetio.parse(fs.readFileSync(file, 'utf8'));
+    const m = new Map(Object.entries(map || {}).filter(([, to]) => to !== '' && to != null).map(([from, to]) => [Number(from), Number(to)]));
+    if (!m.size) throw new Error('Koppel minstens één camera uit het bestand aan een doelcamera');
+    const tos = [...m.values()];
+    if (new Set(tos).size !== tos.length) throw new Error('Twee bestandscamera\'s wijzen naar dezelfde doelcamera');
+    for (const t of tos) camById(t);
+    await presetGuard(tos);
+    presetBusy = true;
+    try {
+      const io = pio();
+      const warnings = [];
+      let stored = 0;
+      const total = data.presets.filter((p) => m.has(p.camera)).length;
+      for (const [from, to] of m) {
+        const rows = data.presets.filter((p) => p.camera === from);
+        const r = await io.importRows(to, rows, (x) => broadcast('presetio:progress', { text: `${camById(x.camera).name}: preset ${x.preset ?? '-'} (${stored + x.done}/${total})` }));
+        stored += r.stored; warnings.push(...r.warnings);
+      }
+      for (const w of warnings) log({ dir: 'err', hex: w });
+      log({ dir: 'info', hex: '', text: `Presets geïmporteerd: ${stored} opgeslagen, ${warnings.length} waarschuwing(en)` });
+      return { stored, warnings };
+    } finally { presetBusy = false; broadcast('presetio:progress', { text: '' }); }
+  },
   'health:get': () => health,
   'track:get': () => tracker.state(),
   'track:set': (_e, { on }) => { tracker.setEnabled(Boolean(on)); log({ dir: 'info', hex: '', text: `Tracking microposten: ${on ? 'aan' : 'uit'}` }); return tracker.state(); },
