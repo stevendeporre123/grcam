@@ -128,4 +128,44 @@ const toHex = (b) => [...b].map((x) => x.toString(16).padStart(2, '0')).join(' '
  */
 const focusTrigger = (a) => Buffer.from([hdr(a), 0x01, 0x04, 0x18, 0x01, 0xff]);
 
-module.exports = { focusTrigger, presetRecall, presetStore, home, panTilt, zoom, powerInquiry, memoryInquiry, toHex };
+
+/** Inquiry: pan/tilt-positie. Antwoord `y0 50 0w 0w 0w 0w 0z 0z 0z 0z FF` (11 bytes). @param {number} a */
+const panTiltPosInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x06, 0x12, 0xff]);
+/** Inquiry: zoompositie. Antwoord `y0 50 0p 0q 0r 0s FF` (7 bytes). @param {number} a */
+const zoomPosInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x04, 0x47, 0xff]);
+/** Inquiry: focuspositie. Antwoord `y0 50 0p 0q 0r 0s FF` (7 bytes). @param {number} a */
+const focusPosInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x04, 0x48, 0xff]);
+/** Inquiry: focusmodus. Antwoord `y0 50 02|03 FF` (02 = auto, 03 = handmatig). @param {number} a */
+const focusModeInquiry = (a) => Buffer.from([hdr(a), 0x09, 0x04, 0x38, 0xff]);
+
+/** 16 bits (twee-complement) als vier nibbles, elk in een eigen byte. */
+const nib16 = (v) => { const u = (Number(v) & 0xffff); return [(u >> 12) & 0xf, (u >> 8) & 0xf, (u >> 4) & 0xf, u & 0xf]; };
+
+/**
+ * Absolute pan/tilt-positie (`8x 01 06 02 VV WW Y Y Y Y Z Z Z Z FF`).
+ * @param {number} a camera-adres 1-7
+ * @param {number} pan  16-bit waarde (negatief toegestaan)
+ * @param {number} tilt 16-bit waarde (negatief toegestaan)
+ * @param {number} [speed=20] pan-snelheid 1-24 (tilt volgt)
+ * @returns {Buffer}
+ */
+const panTiltAbsolute = (a, pan, tilt, speed = 20) => Buffer.from([hdr(a), 0x01, 0x06, 0x02, clamp(speed, 1, 24), clamp(speed, 1, 20), ...nib16(pan), ...nib16(tilt), 0xff]);
+/** Zoom direct (`8x 01 04 47 0p 0q 0r 0s FF`). @param {number} a @param {number} z 0-65535 */
+const zoomDirect = (a, z) => Buffer.from([hdr(a), 0x01, 0x04, 0x47, ...nib16(z), 0xff]);
+/** Focus direct (`8x 01 04 48 0p 0q 0r 0s FF`); werkt alleen in handmatige focus. @param {number} a @param {number} f 0-65535 */
+const focusDirect = (a, f) => Buffer.from([hdr(a), 0x01, 0x04, 0x48, ...nib16(f), 0xff]);
+/** Focusmodus zetten: `auto` of `manual`. @param {number} a @param {'auto'|'manual'} mode */
+const focusMode = (a, mode) => Buffer.from([hdr(a), 0x01, 0x04, 0x38, mode === 'manual' ? 0x03 : 0x02, 0xff]);
+
+/** Leest vier nibbles vanaf `off` als getal; `signed` voor pan/tilt. */
+const readNib16 = (b, off, signed) => { const u = ((b[off] & 0xf) << 12) | ((b[off + 1] & 0xf) << 8) | ((b[off + 2] & 0xf) << 4) | (b[off + 3] & 0xf); return signed && u > 0x7fff ? u - 0x10000 : u; };
+/** Antwoord op de pan/tilt-inquiry. @param {Buffer} b @returns {{pan:number,tilt:number}|null} */
+const parsePanTilt = (b) => (b.length === 11 && b[1] === 0x50 ? { pan: readNib16(b, 2, true), tilt: readNib16(b, 6, true) } : null);
+/** Antwoord op de zoom- of focus-inquiry. @param {Buffer} b @returns {number|null} */
+const parsePos16 = (b) => (b.length === 7 && b[1] === 0x50 ? readNib16(b, 2, false) : null);
+/** Antwoord op de focusmodus-inquiry. @param {Buffer} b @returns {'auto'|'manual'|null} */
+const parseFocusMode = (b) => (b.length === 4 && b[1] === 0x50 ? (b[2] === 0x03 ? 'manual' : b[2] === 0x02 ? 'auto' : null) : null);
+
+module.exports = { focusTrigger, presetRecall, presetStore, home, panTilt, zoom, powerInquiry, memoryInquiry, toHex,
+  panTiltPosInquiry, zoomPosInquiry, focusPosInquiry, focusModeInquiry, panTiltAbsolute, zoomDirect, focusDirect, focusMode,
+  parsePanTilt, parsePos16, parseFocusMode };
