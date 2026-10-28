@@ -338,6 +338,10 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   const p5 = exported.presets.find((p) => p.camera === 1 && p.preset === 5);
   assert.deepStrictEqual([p5.pan, p5.tilt, p5.zoom], [-500, 120, 7000]);
   assert.ok(p5.usedBy.length, 'gekoppelde plaats staat erbij');
+  const sc = await call('presetio:export', { cameras: [1], all: true, file: path.join(tmp, 'scan.json') });
+  assert.ok(sc.ok && sc.data.count === 1 && sc.data.free[1].length === 127 && !sc.data.free[1].includes(5), JSON.stringify(sc.data));
+  assert.ok(Array.isArray(JSON.parse(fs.readFileSync(path.join(tmp, 'scan.json'), 'utf8')).free['1']));
+  assert.ok(events.some(([c, d]) => c === 'presetio:progress' && d.total === 128 && d.state === 'free'));
   assert.ok((await call('presetio:export', { cameras: [1], extra: '5-6', file: outCsv })).ok);
   assert.ok(/^camera,cameraNaam,preset,pan,tilt,zoom,focus,focusModus,gebruiktDoor/.test(fs.readFileSync(outCsv, 'utf8')));
   assert.ok(!(await call('presetio:export', { cameras: [1], extra: 'abc', file: outCsv })).ok, 'ongeldig bereik');

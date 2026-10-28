@@ -70,6 +70,7 @@ for (const port of [2003, 2004, 2005, 2006]) {
       const rd = (o, signed) => { const u = ((d[o] & 0xf) << 12) | ((d[o + 1] & 0xf) << 8) | ((d[o + 2] & 0xf) << 4) | (d[o + 3] & 0xf); return signed && u > 0x7fff ? u - 0x10000 : u; };
       // Nep-positie: pan/tilt/zoom/focus onthouden, presets bewaren en terugzetten (de beweging is meteen klaar)
       if (d[1] === 0x01 && d[2] === 0x06 && d[3] === 0x02) { pose.pan = rd(6, true); pose.tilt = rd(10, true); }
+      if (d[1] === 0x01 && d[2] === 0x06 && d[3] === 0x04) { pose.pan = 0; pose.tilt = 0; }
       if (d[1] === 0x01 && d[2] === 0x04 && d[3] === 0x47) pose.zoom = rd(4);
       if (d[1] === 0x01 && d[2] === 0x04 && d[3] === 0x48 && pose.mode === 3) pose.focus = rd(4);
       if (d[1] === 0x01 && d[2] === 0x04 && d[3] === 0x38) pose.mode = d[4];

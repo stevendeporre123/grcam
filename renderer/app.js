@@ -998,7 +998,17 @@
   // ---------- Presets exporteren / importeren ----------
   let pioFile = null;
   const pioStatus = (t) => { $id('pioStatus').textContent = t; };
-  api.onPresetIoProgress((d) => { if (d.text) pioStatus(d.text); });
+  let pioT0 = 0;
+  api.onPresetIoProgress((d) => {
+    const bar = $id('pioBar');
+    if (!d.total) { bar.hidden = true; return; }
+    if (!pioT0) pioT0 = Date.now();
+    bar.hidden = false; bar.max = d.total; bar.value = d.done;
+    const el = (Date.now() - pioT0) / 1000;
+    const eta = d.done > 2 ? Math.round((el / d.done) * (d.total - d.done)) : null;
+    const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    pioStatus(`${d.camera}: preset ${d.preset ?? '-'}${d.state ? (d.state === 'used' ? ' (in gebruik)' : ' (vrij)') : ''} · ${d.done}/${d.total} (${Math.round((d.done / d.total) * 100)}%)${eta !== null ? ` · nog ca. ${fmt(eta)}` : ''}`);
+  });
   function fillPresetIo() {
     const sel = $id('pioCam');
     const cur = sel.value;
@@ -1007,9 +1017,11 @@
   }
   $id('pioExport').addEventListener('click', async () => {
     const v = $id('pioCam').value;
-    pioStatus('Bezig met uitlezen…');
-    const r = await run(api.presetIoExport(v === 'all' ? 'all' : [Number(v)], $id('pioExtra').value, $id('pioFmt').value));
-    pioStatus(r.ok ? (r.data.canceled ? '' : `Klaar: ${r.data.count} presets bewaard in ${r.data.file}`) : '');
+    pioStatus('Bezig met uitlezen…'); pioT0 = 0;
+    const r = await run(api.presetIoExport(v === 'all' ? 'all' : [Number(v)], $id('pioExtra').value, $id('pioFmt').value, $id('pioAll').checked));
+    const ranges = (a) => { const o = []; for (let i = 0; i < a.length; i++) { let j = i; while (a[j + 1] === a[j] + 1) j++; o.push(j > i ? `${a[i]}-${a[j]}` : `${a[i]}`); i = j; } return o.join(', '); };
+    const freeTxt = r.ok && r.data.free ? ` Vrij: ${Object.entries(r.data.free).map(([c, f]) => `${camName(Number(c))}: ${f.length ? ranges(f) : 'geen'}`).join(' · ')}.` : '';
+    pioStatus(r.ok ? (r.data.canceled ? '' : `Klaar: ${r.data.count} presets in gebruik, bewaard in ${r.data.file}.${freeTxt}`) : '');
     if (r.ok && !r.data.canceled) toast(`${r.data.count} presets geëxporteerd`);
   });
   $id('pioOpen').addEventListener('click', async () => {

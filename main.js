@@ -728,13 +728,14 @@ async function presetGuard(camIds) {
 const seatLabel = (id) => { try { const x = loadPlan().seats.find((q) => q.id === id); return x ? [x.naam, x.regel2].filter(Boolean).join(' – ') : id; } catch { return id; } };
 
 const handlers = {
-  'presetio:export': async (_e, { cameras, extra, format, file }) => {
+  'presetio:export': async (_e, { cameras, extra, format, file, all }) => {
     const ids = (cameras === 'all' ? config.cameras.map((c) => c.id) : [].concat(cameras)).map(Number);
     if (!ids.length) throw new Error('Kies een camera');
     await presetGuard(ids);
     const extras = presetio.parseRange(extra);
     const linked = presetio.linkedPresets(config, seatLabel);
-    const plan = ids.map((id) => ({ id, presets: [...new Set([...(linked.get(id) ? [...linked.get(id).keys()] : []), ...extras])].sort((a, b) => a - b) }));
+    const every = Array.from({ length: 128 }, (_, i) => i);
+    const plan = ids.map((id) => ({ id, presets: all ? every : [...new Set([...(linked.get(id) ? [...linked.get(id).keys()] : []), ...extras])].sort((a, b) => a - b) }));
     const total = plan.reduce((n, p) => n + p.presets.length, 0);
     if (!total) throw new Error('Geen presets om te exporteren: er zijn geen koppelingen en geen extra bereik opgegeven');
     const fmt = format === 'csv' || /\.csv$/i.test(file || '') ? 'csv' : 'json';
@@ -749,16 +750,21 @@ const handlers = {
     try {
       const io = pio();
       const rows = [];
+      const free = {};
       let base = 0;
+      const prog = (x) => broadcast('presetio:progress', { camera: camById(x.camera).name, preset: x.preset, state: x.state, done: base + x.done, total });
       for (const p of plan) {
-        rows.push(...await io.exportCamera(p.id, p.presets, linked.get(p.id) || new Map(), (x) => broadcast('presetio:progress', { text: `${camById(x.camera).name}: preset ${x.preset ?? '-'} (${base + x.done}/${total})` })));
+        if (all) {
+          const r = await io.scanCamera(p.id, p.presets, linked.get(p.id) || new Map(), prog);
+          rows.push(...r.rows); free[p.id] = r.free;
+        } else rows.push(...await io.exportCamera(p.id, p.presets, linked.get(p.id) || new Map(), prog));
         base += p.presets.length;
       }
-      const data = { cameras: ids.map((id) => ({ id, name: camById(id).name })), presets: rows };
+      const data = { cameras: ids.map((id) => ({ id, name: camById(id).name })), presets: rows, ...(all ? { free } : {}) };
       fs.writeFileSync(target, presetio.serialize(data, /\.csv$/i.test(target) ? 'csv' : 'json'));
       log({ dir: 'info', hex: '', text: `Presets geëxporteerd: ${rows.length} naar ${target}` });
-      return { file: target, count: rows.length };
-    } finally { presetBusy = false; broadcast('presetio:progress', { text: '' }); }
+      return { file: target, count: rows.length, free: all ? free : null };
+    } finally { presetBusy = false; broadcast('presetio:progress', { done: 0, total: 0 }); }
   },
   'presetio:open': async (_e, { file }) => {
     let target = file;
@@ -787,13 +793,13 @@ const handlers = {
       const total = data.presets.filter((p) => m.has(p.camera)).length;
       for (const [from, to] of m) {
         const rows = data.presets.filter((p) => p.camera === from);
-        const r = await io.importRows(to, rows, (x) => broadcast('presetio:progress', { text: `${camById(x.camera).name}: preset ${x.preset ?? '-'} (${stored + x.done}/${total})` }));
+        const r = await io.importRows(to, rows, (x) => broadcast('presetio:progress', { camera: camById(x.camera).name, preset: x.preset, done: stored + x.done, total }));
         stored += r.stored; warnings.push(...r.warnings);
       }
       for (const w of warnings) log({ dir: 'err', hex: w });
       log({ dir: 'info', hex: '', text: `Presets geïmporteerd: ${stored} opgeslagen, ${warnings.length} waarschuwing(en)` });
       return { stored, warnings };
-    } finally { presetBusy = false; broadcast('presetio:progress', { text: '' }); }
+    } finally { presetBusy = false; broadcast('presetio:progress', { done: 0, total: 0 }); }
   },
   'health:get': () => health,
   'track:get': () => tracker.state(),
