@@ -174,6 +174,10 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(!logs().some((l) => /Camera 3 naar PGM/.test(l.text)), 'vervallen schakeling');
   assert.ok(logs().some((l) => /Oude naam naar PGM/.test(l.text)));
 
+  // Statusbalk: een gelukt commando maakt de camera 'ok'
+  const hl = (await call('health:get')).data;
+  assert.ok(Object.values(hl.cams).some((c) => c.ok === true), JSON.stringify(hl));
+
   // 3d. Autofocus
   logsReset();
   assert.ok((await call('cam:focus', { camera: 2 })).ok);

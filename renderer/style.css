@@ -152,3 +152,11 @@ dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
 .tag.paused { background:#713f12; color:#fde68a; }
 #ptUse.used { color:#fbbf24; }
 .savepre { width:100%; margin-top:8px; }
+
+.statusbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 18px; padding:6px 16px; border-top:1px solid var(--line); background:#10141a; font-size:13px; color:#b8c0cc; }
+.statusbar.alarm { background:#3b1212; border-top-color:#7f1d1d; }
+.statusbar .si, .statusbar .sgrp { display:inline-flex; align-items:center; gap:6px; }
+.statusbar .sgrp { gap:8px; }
+.sdot { width:9px; height:9px; border-radius:50%; display:inline-block; background:#556070; }
+.sdot.ok { background:#22c55e; } .sdot.bad { background:#ef4444; } .sdot.warn { background:#f59e0b; } .sdot.off { background:#556070; }
+.statusbar b.bad { color:#fca5a5; }
