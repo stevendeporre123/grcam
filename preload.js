@@ -96,7 +96,7 @@ contextBridge.exposeInMainWorld('api', {
   trackSet: (on) => call('track:set', { on }),
   /** De automatische tracking koos een plaats of zaalknop (net als een klik). */
   onActive: (fn) => ipcRenderer.on('active', (_e, d) => fn(d)),
-  presetIoExport: (cameras, extra, format) => call('presetio:export', { cameras, extra, format }),
+  presetIoExport: (cameras, extra, format, all) => call('presetio:export', { cameras, extra, format, all }),
   presetIoOpen: () => call('presetio:open', {}),
   presetIoImport: (file, map) => call('presetio:import', { file, map }),
   onPresetIoProgress: (fn) => ipcRenderer.on('presetio:progress', (_e, d) => fn(d)),

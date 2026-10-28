@@ -57,6 +57,7 @@ function fakeCam(initial = {}) {
 function wire(cams) {
   const apply = (st, b) => {
     if (b[3] === 0x02 && b[2] === 0x06) { st.pan = visca.parsePanTilt(Buffer.from([0x90, 0x50, ...b.slice(6, 14), 0xff])).pan; st.tilt = visca.parsePanTilt(Buffer.from([0x90, 0x50, ...b.slice(6, 14), 0xff])).tilt; }
+    else if (b[2] === 0x06 && b[3] === 0x04) { st.pan = 0; st.tilt = 0; }
     else if (b[2] === 0x04 && b[3] === 0x47) st.zoom = visca.parsePos16(Buffer.from([0x90, 0x50, ...b.slice(4, 8), 0xff]));
     else if (b[2] === 0x04 && b[3] === 0x48 && st.mode === 'manual') st.focus = visca.parsePos16(Buffer.from([0x90, 0x50, ...b.slice(4, 8), 0xff]));
     else if (b[2] === 0x04 && b[3] === 0x38) st.mode = b[4] === 3 ? 'manual' : 'auto';
@@ -89,6 +90,13 @@ function wire(cams) {
   assert.deepStrictEqual(res.warnings, []);
   assert.deepStrictEqual(cams[2].presets[5], { pan: -1200, tilt: 340, zoom: 9000, focus: 4321, mode: 'manual' });
   assert.strictEqual(cams[2].presets[6].mode, 'auto');
+  // scan: 5 en 6 in gebruik, 7 identiek aan 6 (dubbel gebruik), 4 en 8 vrij
+  const c3 = { 1: fakeCam({ 5: { pan: 10, tilt: 20, zoom: 30, focus: 1, mode: 'auto' }, 6: { pan: 300, tilt: 40, zoom: 0, focus: 2, mode: 'auto' }, 7: { pan: 300, tilt: 40, zoom: 0, focus: 2, mode: 'auto' } }) };
+  const seen = [];
+  const sc = await pio.createPresetIO(wire(c3)).scanCamera(1, [4, 5, 6, 7, 8, 9], new Map(), (p) => seen.push(p.state));
+  assert.deepStrictEqual(sc.rows.map((r) => r.preset), [5, 6, 7]);
+  assert.deepStrictEqual(sc.free, [4, 8, 9]);
+  assert.strictEqual(seen.filter((x) => x === 'free').length, 3);
   // een camera die nooit stilstaat geeft een foutmelding
   let n = 0;
   const w = wire(cams);

@@ -77,7 +77,7 @@ function serialize(data, format) {
     }
     return `${lines.join('\r\n')}\r\n`;
   }
-  return JSON.stringify({ app: 'grcam-presets', version: FORMAT_VERSION, exportedAt: data.exportedAt || new Date().toISOString(), cameras: data.cameras, presets: data.presets }, null, 2);
+  return JSON.stringify({ app: 'grcam-presets', version: FORMAT_VERSION, exportedAt: data.exportedAt || new Date().toISOString(), cameras: data.cameras, presets: data.presets, ...(data.free ? { free: data.free } : {}) }, null, 2);
 }
 
 /** Splitst één CSV-regel (komma of puntkomma als scheider, aanhalingstekens ondersteund). */
@@ -219,6 +219,48 @@ function createPresetIO(deps) {
   }
 
   /**
+   * Overloopt presets en bepaalt welke in gebruik zijn. Een lege preset doet bij oproepen niets, dus: staat de camera
+   * na het oproepen nog op dezelfde plek als ervoor, dan gaat ze eerst naar Home en wordt de preset opnieuw opgeroepen;
+   * blijft ze dan op Home staan, dan is de preset vrij.
+   * @param {number} cam
+   * @param {number[]} presets
+   * @param {Map<number,string[]>} [usedBy]
+   * @param {(p:{camera:number,done:number,total:number,preset:number|null,state?:'used'|'free'})=>void} [onProgress]
+   * @returns {Promise<{rows:any[], free:number[]}>}
+   */
+  async function scanCamera(cam, presets, usedBy = new Map(), onProgress = () => {}) {
+    const a = addrOf(cam);
+    const goHome = async () => { await send(cam, visca.home(a)); return settle(cam); };
+    const rows = [];
+    const free = [];
+    let prev = await goHome();
+    let prevIsHome = true;
+    let done = 0;
+    for (const preset of presets) {
+      onProgress({ camera: cam, done, total: presets.length, preset });
+      await send(cam, visca.presetRecall(a, preset));
+      let pose = await settle(cam);
+      let used = !near(pose, prev);
+      if (!used && !prevIsHome) {
+        const home = await goHome();
+        await send(cam, visca.presetRecall(a, preset));
+        pose = await settle(cam);
+        used = !near(pose, home);
+        prev = pose; prevIsHome = !used;
+      } else { prev = pose; prevIsHome = !used; }
+      if (used) {
+        const focus = await query(cam, visca.focusPosInquiry(a), visca.parsePos16);
+        const focusMode = await query(cam, visca.focusModeInquiry(a), visca.parseFocusMode);
+        rows.push({ camera: cam, preset, ...pose, focus, focusMode, usedBy: usedBy.get(preset) || [] });
+      } else free.push(preset);
+      done += 1;
+      onProgress({ camera: cam, done, total: presets.length, preset, state: used ? 'used' : 'free' });
+    }
+    log(`${nameOf(cam)}: ${rows.length} presets in gebruik, ${free.length} vrij`, cam);
+    return { rows, free };
+  }
+
+  /**
    * Schrijft rijen naar een doelcamera: stand instellen, afwachten, controleren en daarna als preset opslaan.
    * @param {number} cam doelcamera
    * @param {ReturnType<typeof parse>['presets']} rows
@@ -249,7 +291,7 @@ function createPresetIO(deps) {
     return { stored: done, warnings };
   }
 
-  return { exportCamera, importRows, settle, readPose };
+  return { exportCamera, scanCamera, importRows, settle, readPose };
 }
 
 module.exports = { parseRange, linkedPresets, serialize, parse, createPresetIO, FORMAT_VERSION, CSV_HEADER };
