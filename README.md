@@ -151,3 +151,7 @@ Beheer → Instellingen → *Videomixer*: kies **BrightEye NXT-430** (zoals voor
 ### ATEM testen zonder camera's
 
 Beheer → Instellingen → ATEM: **Test: verbinden en ingangen tonen** verbindt tijdelijk met het ingevulde adres (ook vóór je bewaart) en zet in het log: model, videoformaat, wat er op programma en preview staat en alle ingangen met hun naam en type (SDI/HDMI/intern). Met het veld *Ingang* en de knoppen *Naar PVW* / *Naar PGM* stuur je een ingang door, bv. **1000 = kleurbalken**, zichtbaar op de programma-uitgang of multiview. Zo kan je de verbinding, de firewall en de ingangsnummers controleren voor er een camera hangt. Een lege HDMI-ingang kan je ook schakelen (je ziet dan zwart).
+
+### Audio: XLR-volume (ATEM)
+
+Bij een ingeschakelde ATEM staat onder *Snelheid* het blok **Audio (XLR)**: een schuif voor het volume van de XLR-ingang (bron 1001 van de klassieke audiomixer; −60 dB of lager = stil, tot +6 dB) en een knop om te dempen. De stand volgt de ATEM: draai je aan het toestel of in ATEM Software Control, dan beweegt de schuif mee. Heeft de ATEM geen klassieke audiomixer met XLR-ingang (bv. Fairlight-modellen), dan blijft het blok verborgen. Een niveaumeter is er niet: de gebruikte bibliotheek leest de klassieke audiometers niet uit.

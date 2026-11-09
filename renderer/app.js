@@ -684,6 +684,31 @@
     bar.innerHTML = items.join('');
     bar.classList.toggle('alarm', Boolean(trackState.enabled && (h.cocon.ok === false || bad.length > 0 || h.brighteye.ok === false)));
   }
+  // ---------- Audio (XLR-ingang van de ATEM) ----------
+  let audioOn = true;
+  let audioSend = 0;
+  const showAudio = (a) => {
+    const box = $id('audioBox');
+    const usable = cfg?.switcher === 'atem' && swOn() && a;
+    box.hidden = !usable;
+    if (!usable) return;
+    if (document.activeElement !== $id('audioGain')) $id('audioGain').value = Math.max(-60, a.gain);
+    $id('audioVal').textContent = a.gain <= -60 ? '−∞ dB' : `${a.gain > 0 ? '+' : ''}${a.gain.toFixed(1)} dB`;
+    audioOn = a.on;
+    $id('audioMute').textContent = a.on ? 'Aan' : 'Gedempt';
+    $id('audioMute').classList.toggle('muted', !a.on);
+  };
+  const refreshAudio = () => { if (cfg?.switcher === 'atem' && swOn()) api.audioGet().then((r) => showAudio(r.ok ? r.data : null)); else $id('audioBox').hidden = true; };
+  api.onAudio((a) => showAudio(a));
+  $id('audioGain').addEventListener('input', (e) => {
+    const g = Number(e.target.value);
+    $id('audioVal').textContent = g <= -60 ? '−∞ dB' : `${g > 0 ? '+' : ''}${g.toFixed(1)} dB`;
+    clearTimeout(audioSend);
+    audioSend = setTimeout(() => run(api.audioSet({ gain: g })), 60); // niet bij elke pixel een UDP-pakket
+  });
+  $id('audioMute').addEventListener('click', () => run(api.audioSet({ on: !audioOn })));
+  setTimeout(refreshAudio, 1500); setInterval(refreshAudio, 5000); // vangt het opstarten van de verbinding en gewijzigde instellingen op
+
   let appVersion = '';
   api.appInfo().then((r) => { if (r.ok) { appVersion = r.data.version; renderStatus(); } });
   api.onHealth((d) => { healthState = d; renderStatus(); });
