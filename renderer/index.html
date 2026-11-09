@@ -171,6 +171,17 @@
       <label>IPL T S6 host <input name="host" type="text" required></label>
       <fieldset id="camFields"><legend>Camera's</legend></fieldset>
       <fieldset>
+        <legend>Videomixer (schakelt de camera's naar PGM)</legend>
+        <label>Gebruik <select name="swType"><option value="brighteye">BrightEye NXT-430</option><option value="atem">Blackmagic ATEM</option></select></label>
+        <p class="hint">Bij de ATEM zijn er geen miniaturen. Kies hieronder per camera de ATEM-ingang (standaard camera 1-4 = ingang 5-8).</p>
+      </fieldset>
+      <fieldset>
+        <legend>ATEM (UDP-poort 9910)</legend>
+        <label><input name="aEnabled" type="checkbox"> Inschakelen</label>
+        <label>Host / IP-adres <input name="aHost" type="text"></label>
+        <label>Mixer (M/E, telt vanaf 0; bij een ATEM Television Studio HD is dat 0) <input name="aMe" type="number" min="0" max="3"></label>
+      </fieldset>
+      <fieldset>
         <legend>Brighteye NXT-430 (optioneel)</legend>
         <label><input name="bEnabled" type="checkbox"> Inschakelen</label>
         <label>Host <input name="bHost" type="text"></label>

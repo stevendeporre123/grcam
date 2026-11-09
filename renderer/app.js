@@ -60,6 +60,11 @@
   const labelOf = (id) => zaalOf(id)?.label ?? seatOf(id)?.naam ?? id;
   /** Weergavenaam van een camera. @param {number} id */
   const camName = (id) => cfg.cameras.find((c) => c.id === id)?.name ?? `Camera ${id}`;
+  /** Staat er een videomixer (BrightEye of ATEM) ingesteld en aan? */
+  const swOn = () => (cfg.switcher === 'atem' ? Boolean(cfg.atem?.enabled && cfg.atem?.host) : Boolean(cfg.brighteye?.enabled && cfg.brighteye?.host));
+  const swName = () => (cfg.switcher === 'atem' ? 'ATEM' : 'BrightEye');
+  /** Miniaturen bestaan enkel bij de BrightEye. */
+  const thumbsOn = () => cfg.switcher !== 'atem' && Boolean(cfg.brighteye?.enabled && cfg.brighteye.host && cfg.brighteye.thumbs?.enabled !== false);
 
   /**
    * Toont kort een foutmelding onderaan het scherm.
@@ -270,7 +275,7 @@
       const id = Number(cam.dataset.cam);
       selectCamera(id);
       // Klik op de camera op het plan = die camera ook naar de programma-uitgang (BrightEye), niet in inleermodus.
-      if (!learn && cfg.brighteye?.enabled) run(api.program(id)).then((r) => { if (r.ok) toast(`Camera ${id} naar programma`); });
+      if (!learn && swOn()) run(api.program(id)).then((r) => { if (r.ok) toast(`Camera ${id} naar programma`); });
       return;
     }
     const g = e.target.closest('.seat');
@@ -669,9 +674,9 @@
     const camDots = cfg.cameras.map((c) => { const k = h.cams?.[c.id]; return `<span class="si">${dot(k?.ok ?? null, k?.ok === false ? `${c.name}: ${k.detail}` : k?.ok ? `${c.name}: laatste opdracht gelukt` : `${c.name}: nog geen opdracht gestuurd`)}${esc(String(c.id))}</span>`; }).join('');
     const bad = cfg.cameras.filter((c) => h.cams?.[c.id]?.ok === false);
     items.push(`<span class="sgrp">Camera's ${camDots}${bad.length ? `<b class="bad">&nbsp;${bad.map((c) => esc(c.name)).join(', ')}: geen verbinding</b>` : ''}</span>`);
-    const beOn = cfg.brighteye?.enabled && cfg.brighteye?.host;
-    items.push(beOn ? `<span class="si">${dot(h.brighteye.ok, h.brighteye.detail)}BrightEye${h.brighteye.ok === false ? ' <b class="bad">fout</b>' : ''}${pgmCam ? ` · PGM: ${esc(camName(pgmCam))}` : ''}</span>` : '<span class="si mute">' + dot(null) + 'BrightEye uit</span>');
-    if (beOn && cfg.brighteye?.thumbs?.enabled !== false) items.push(`<span class="si">${dot(h.thumbs.ok, h.thumbs.detail)}Miniaturen${h.thumbs.ok === false ? ' <b class="bad">fout</b>' : ''}</span>`);
+    const beOn = swOn();
+    items.push(beOn ? `<span class="si">${dot(h.brighteye.ok, h.brighteye.detail)}${swName()}${h.brighteye.ok === false ? ' <b class="bad">fout</b>' : ''}${pgmCam ? ` · PGM: ${esc(camName(pgmCam))}` : ''}</span>` : `<span class="si mute">${dot(null)}${swName()} uit</span>`);
+    if (thumbsOn()) items.push(`<span class="si">${dot(h.thumbs.ok, h.thumbs.detail)}Miniaturen${h.thumbs.ok === false ? ' <b class="bad">fout</b>' : ''}</span>`);
     const seat = trackState.mic != null ? plan?.seats?.find((x) => x.mic === trackState.mic) : null;
     items.push(`<span class="si">${trackState.enabled ? (trackState.paused ? '<span class="sdot warn"></span>Tracking gepauzeerd' : `<span class="sdot ok"></span>Tracking aan${seat ? `: ${esc(seat.naam)}` : ''}`) : '<span class="sdot off"></span>Tracking uit'}</span>`);
     bar.innerHTML = items.join('');
@@ -701,6 +706,7 @@
       c.port = Number(f.querySelector(`[data-p="${c.id}"]`).value);
       c.viscaAddr = Number(f.querySelector(`[data-a="${c.id}"]`).value);
       c.beSource = Number(f.querySelector(`[data-b="${c.id}"]`).value);
+      c.atemInput = Number(f.querySelector(`[data-i="${c.id}"]`).value) || c.id + 4;
     }
   }
 
@@ -729,9 +735,11 @@
     f.uCheck.checked = cfg.updateCheck !== false;
     api.appInfo().then((r) => { if (r.ok) $id('appInfo').textContent = `Versie ${r.data.version} · gegevens in ${r.data.dataDir}`; });
     $id('camFields').innerHTML = '<legend>Welke camera is welk nummer? Pas de poort aan en klik Test.</legend>' +
-      '<div class="camrow camhead"><span>Naam</span><span>IPL-poort</span><span>VISCA</span><span>Brighteye</span><span></span></div>' +
-      cfg.cameras.map((c) => `<div class="camrow"><input data-n="${c.id}" value="${esc(c.name)}"><input data-p="${c.id}" type="number" value="${c.port}"><input data-a="${c.id}" type="number" min="1" max="7" value="${c.viscaAddr}"><input data-b="${c.id}" type="number" min="0" value="${c.beSource ?? 0}"><button type="button" data-test="${c.id}">Test</button></div>`).join('');
+      '<div class="camrow camhead"><span>Naam</span><span>IPL-poort</span><span>VISCA</span><span>Brighteye</span><span>ATEM-ingang</span><span></span></div>' +
+      cfg.cameras.map((c) => `<div class="camrow"><input data-n="${c.id}" value="${esc(c.name)}"><input data-p="${c.id}" type="number" value="${c.port}"><input data-a="${c.id}" type="number" min="1" max="7" value="${c.viscaAddr}"><input data-b="${c.id}" type="number" min="0" value="${c.beSource ?? 0}"><input data-i="${c.id}" type="number" min="1" value="${c.atemInput ?? c.id + 4}"><button type="button" data-test="${c.id}">Test</button></div>`).join('');
     $id('camFields').querySelectorAll('[data-test]').forEach((b) => b.addEventListener('click', () => wiggle(Number(b.dataset.test))));
+    f.swType.value = cfg.switcher === 'atem' ? 'atem' : 'brighteye';
+    f.aEnabled.checked = !!cfg.atem?.enabled; f.aHost.value = cfg.atem?.host || ''; f.aMe.value = cfg.atem?.me ?? 0;
     f.bEnabled.checked = !!cfg.brighteye.enabled;
     f.bHost.value = cfg.brighteye.host || '';
     f.bPort.value = cfg.brighteye.port || 5200;
@@ -757,6 +765,8 @@
     cfg.ipl.host = clean(f.host.value);
     readCamFields(f);
     cfg.updateCheck = f.uCheck.checked;
+    cfg.switcher = f.swType.value === 'atem' ? 'atem' : 'brighteye';
+    cfg.atem = { enabled: f.aEnabled.checked, host: clean(f.aHost.value), me: Math.max(0, Number(f.aMe.value) || 0) };
     Object.assign(cfg.brighteye, { enabled: f.bEnabled.checked, host: clean(f.bHost.value), port: Number(f.bPort.value), dest: Number(f.bDest.value), pvwDest: Number(f.bPvw.value) });
     cfg.tracking = { autoStart: f.trAuto.checked, overview: f.trOverview.value, delayMs: Math.max(0, Number(f.trDelay.value) || 0) };
     cfg.brighteye.thumbs = { enabled: f.thEnabled.checked, port: Number(f.thPort.value) || 8080, intervalMs: Math.max(1000, Number(f.thMs.value) || 3000), pgmSrc: Number(f.thPgm.value) || 0, cpguid: f.thGuid.value.trim() };
@@ -886,7 +896,7 @@
   // ---------- Miniaturen (BrightEye) ----------
   /** Haalt een miniatuur op en zet die in een <img>; toont de fout in `msgEl`. */
   async function thumbInto(img, msgEl, camera) {
-    if (!cfg.brighteye?.enabled || cfg.brighteye.thumbs?.enabled === false) { img.hidden = true; if (msgEl) msgEl.textContent = ''; return; }
+    if (!thumbsOn()) { img.hidden = true; if (msgEl) msgEl.textContent = ''; return; }
     const r = await api.thumb(camera);
     if (r.ok) { img.src = r.data.image; img.hidden = false; if (msgEl) msgEl.textContent = ''; }
     else { img.hidden = true; if (msgEl) msgEl.textContent = r.error; }
@@ -899,11 +909,11 @@
   function renderThumbs() {
     const box = $id('thumbs');
     const t = cfg.brighteye?.thumbs;
-    const sig = JSON.stringify([cfg.brighteye?.enabled, cfg.brighteye?.host, t, cfg.cameras.map((c) => [c.id, c.name, c.beSource])]);
+    const sig = JSON.stringify([cfg.switcher, cfg.brighteye?.enabled, cfg.brighteye?.host, t, cfg.cameras.map((c) => [c.id, c.name, c.beSource])]);
     if (sig === thumbSig) return; // niets gewijzigd: de lopende verversing blijft
     thumbSig = sig;
     clearInterval(thumbTimer);
-    const on = cfg.brighteye?.enabled && cfg.brighteye.host && t?.enabled !== false;
+    const on = thumbsOn();
     box.hidden = !on;
     $id('thumbCol').hidden = !on;
     $id('viewOp').classList.toggle('nothumbs', !on);
@@ -963,7 +973,7 @@
   // Zolang het preset-hulpmiddel of het koppelvenster openstaat, verversen de miniaturen vanzelf (de camera heeft tijd nodig om te bewegen).
   let liveBusy = false;
   setInterval(async () => {
-    if (liveBusy || document.hidden || !cfg?.brighteye?.enabled) return;
+    if (liveBusy || document.hidden || !thumbsOn()) return;
     const tools = $id('dlgTools').open; const assign = $id('dlgAssign').open;
     if (!tools && !assign) return;
     liveBusy = true;
@@ -1104,7 +1114,7 @@
   async function presetTry(target) {
     const camera = Number($id('ptCam').value);
     const preset = Number($id('ptNum').value);
-    if (target && !cfg.brighteye?.enabled) { toast('Zet eerst de Brighteye-koppeling aan (Beheer → Instellingen)'); return; }
+    if (target && !swOn()) { toast(`Zet eerst de ${swName()}-koppeling aan (Beheer → Instellingen)`); return; }
     if (target === 'pgm' && !confirm(`Preset ${preset} oproepen op camera ${camera} en die camera LIVE op PGM zetten?`)) return;
     const r = await run(api.presetTry(camera, preset, target));
     if (r.ok) { toast(`Camera ${camera}: preset ${preset} opgeroepen${target ? ` en naar ${target.toUpperCase()}` : ''}`); thumbSoon($id('ptThumb'), $id('ptThumbMsg'), () => camera); }

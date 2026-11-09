@@ -26,6 +26,7 @@ const store = require('./data-store');
 const { cleanHost } = require('./host');
 const updater = require('./updater');
 const presetio = require('./preset-io');
+const atemSw = require('./atem-switch');
 
 /** GitHub-repository waaruit updates komen (publieke releases). */
 const REPO = 'stevendeporre123/grcam';
@@ -41,12 +42,15 @@ app.setPath('userData', store.dataDir(app.getPath('appData')));
  * @property {number} port          TCP-poort op de IPL die bij de COM-poort van de camera hoort
  * @property {number} viscaAddr     VISCA-adres (1-7)
  * @property {number} beSource      bronnummer in de BrightEye (telt vanaf 0, volgens het Profile)
+ * @property {number} atemInput      ingang op de ATEM (telt vanaf 1, zoals op het toestel)
  * @property {{x:number,y:number}} [pos] positie op het zittingsplan (plan-coördinaten)
  *
  * @typedef {Object} Config
  * @property {{host:string, idleCloseMs:number, moveWatchdogMs:number}} ipl
  * @property {Camera[]} cameras
  * @property {{enabled:boolean, host:string, port:number, dest:number}} brighteye
+ * @property {'brighteye'|'atem'} switcher   welke videomixer de camera's naar PGM/PVW schakelt
+ * @property {{enabled:boolean, host:string, me:number}} atem  Blackmagic ATEM (UDP 9910); camera.atemInput = ingang op de ATEM
  * @property {'ambtenaren'|'zaal'} view                        richting van het plan
  * @property {{id:string,label:string}[]} zaal                 de algemene zaalknoppen
  * @property {Record<string,{camera:number,preset:number}>} assign  zetel-id of zaal-id -> camera + preset
@@ -149,6 +153,8 @@ function normalizeConfig(raw) {
   c.ipl = { ...defaults.ipl, ...c.ipl };
   c.brighteye = { ...defaults.brighteye, ...c.brighteye };
   c.brighteye.thumbs = { ...defaults.brighteye.thumbs, ...(raw?.brighteye?.thumbs || {}) };
+  c.switcher = c.switcher === 'atem' ? 'atem' : 'brighteye';
+  c.atem = { enabled: Boolean(c.atem?.enabled), host: cleanHost(c.atem?.host), me: Math.max(0, Number(c.atem?.me) || 0) };
   c.ipl.host = cleanHost(c.ipl.host);
   c.brighteye.host = cleanHost(c.brighteye.host);
   c.timing = { ...defaults.timing, ...c.timing };
@@ -173,6 +179,7 @@ function saveConfig(next) {
   config = next;
   if (config.ipl) config.ipl.host = cleanHost(config.ipl.host); // "http://10.0.0.1/" -> "10.0.0.1"
   if (config.brighteye) config.brighteye.host = cleanHost(config.brighteye.host);
+  if (config.atem) config.atem.host = cleanHost(config.atem.host);
   // De debugstand wordt nooit bewaard (staat bij elke start uit); zo maakt het schakelen geen back-ups aan.
   store.writeWithBackup(cfgPath(), JSON.stringify({ ...config, debug: false }, null, 2));
 }
@@ -488,6 +495,52 @@ let pgmCam = null;
 let goSeq = 0;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Staat er een videomixer (BrightEye of ATEM) ingesteld en aan? */
+const switcherOn = () => (config.switcher === 'atem' ? Boolean(config.atem?.enabled && config.atem.host) : Boolean(config.brighteye.enabled && config.brighteye.host));
+const switcherName = () => (config.switcher === 'atem' ? 'ATEM' : 'Brighteye');
+
+/** @type {ReturnType<typeof atemSw.createAtemSwitch>|null} */
+let atemClient = null;
+const atemSwitch = () => {
+  if (!atemClient) {
+    atemClient = atemSw.createAtemSwitch({
+      Atem: require('atem-connection').Atem,
+      log: (msg) => log({ dir: 'info', hex: '', text: msg }),
+      onHealth: (ok, detail) => setHealth('brighteye', ok, detail), // één statusslot voor "de videomixer"
+      onProgram: (input) => {
+        const cam = input == null ? null : config.cameras.find((c) => Number(c.atemInput) === input);
+        pgmCam = cam ? cam.id : null;
+        broadcast('pgm', { camera: pgmCam });
+      },
+    });
+  }
+  return atemClient;
+};
+/** Houdt de ATEM-verbinding in lijn met de instellingen (verbinden, van adres wisselen of sluiten). */
+function atemSync() {
+  if (config.switcher === 'atem' && switcherOn()) atemSwitch().connect(config.atem.host, config.atem.me);
+  else if (atemClient) { atemClient.close(); setHealth('brighteye', null, ''); }
+}
+
+/** Schakelt een camera naar PGM of PVW op de ingestelde videomixer. */
+async function switcherTake(camera, target = 'pgm') {
+  if (config.switcher !== 'atem') return brighteyeTake(camera, target);
+  const cam = camById(camera);
+  if (!switcherOn()) throw new Error('ATEM-koppeling is niet ingesteld (Beheer → Instellingen)');
+  const input = Number(cam.atemInput);
+  if (!Number.isInteger(input) || input < 1) throw new Error(`${cam.name} heeft geen ATEM-ingang (Beheer → Instellingen)`);
+  atemSync();
+  try {
+    await atemSwitch().take(input, target === 'pvw' ? 'pvw' : 'pgm');
+  } catch (e) {
+    setHealth('brighteye', false, e.message);
+    log({ dir: 'err', camera, hex: `atem: ingang ${input}`, text: e.message });
+    throw e;
+  }
+  if (target !== 'pvw') { pgmCam = cam.id; broadcast('pgm', { camera: cam.id }); }
+  log({ dir: 'tx', camera, hex: `atem: ingang ${input}`, text: `ATEM: ${cam.name} (ingang ${input}) naar ${target === 'pvw' ? 'PVW (preview)' : 'PGM (programma)'} schakelen` });
+}
+
 async function brighteyeTake(camera, target = 'pgm') {
   const cam = camById(camera);
   const dest = target === 'pvw' ? Number(config.brighteye.pvwDest ?? 0) : Number(config.brighteye.dest ?? 1);
@@ -524,11 +577,26 @@ async function brighteyeStatus() {
   }
 }
 
+/** Logt wat de videomixer nu op PGM/PVW heeft staan. */
+async function switcherStatus() {
+  if (config.switcher !== 'atem') return brighteyeStatus();
+  if (!switcherOn()) throw new Error('ATEM-koppeling is niet ingesteld (Beheer → Instellingen)');
+  atemSync();
+  await atemSwitch().ready();
+  const nm = (i) => { const c = config.cameras.find((x) => Number(x.atemInput) === i); return i == null ? 'onbekend' : `ingang ${i}${c ? ` (${c.name})` : ''}`; };
+  log({ dir: 'rx', hex: 'atem', text: `ATEM: programma staat op ${nm(atemSwitch().program())}, preview op ${nm(atemSwitch().preview())}` });
+}
+
 /**
  * Welke camera staat nu op PGM? Vraagt de BrightEye; bij een fout geldt de laatst bekende stand.
  * @returns {Promise<number|null>} camera-id of null als onbekend
  */
 async function pgmSource() {
+  if (config.switcher === 'atem') {
+    if (switcherOn()) { atemSync(); const input = atemSwitch().program(); const cam = input == null ? null : config.cameras.find((c) => Number(c.atemInput) === input); if (atemSwitch().isConnected()) pgmCam = cam ? cam.id : null; }
+    broadcast('pgm', { camera: pgmCam });
+    return pgmCam;
+  }
   try {
     const reply = await brighteyeExchange(statusCommand(Number(config.brighteye.dest ?? 1)));
     const st = parseStatus(reply)[0];
@@ -552,7 +620,7 @@ async function pgmSource() {
 async function goTo({ camera, preset, alt }) {
   const my = ++goSeq;
   const cam = camById(camera);
-  const take = config.brighteye.enabled && config.brighteye.host;
+  const take = switcherOn();
   const t = config.timing || {};
   const live = take ? await pgmSource() : null;
   const useAlt = Boolean(take && alt && alt.camera !== cam.id && live === cam.id);
@@ -567,9 +635,9 @@ async function goTo({ camera, preset, alt }) {
     ]);
     (async () => {
       await sleep(Number(t.takeDelayMs ?? 1500)); if (my !== goSeq) return;
-      await brighteyeTake(ac.id, 'pgm'); if (my !== goSeq) return;
+      await switcherTake(ac.id, 'pgm'); if (my !== goSeq) return;
       await sleep(Number(t.altHoldMs ?? 4000)); if (my !== goSeq) return;
-      await brighteyeTake(cam.id, 'pgm');
+      await switcherTake(cam.id, 'pgm');
     })().catch(failed);
     return { mode: 'alt', live };
   }
@@ -578,7 +646,7 @@ async function goTo({ camera, preset, alt }) {
   if (live !== cam.id) {
     (async () => {
       await sleep(Number(t.takeDelayMs ?? 1500)); if (my !== goSeq) return;
-      await brighteyeTake(cam.id, 'pgm');
+      await switcherTake(cam.id, 'pgm');
     })().catch(failed);
   }
   return { mode: 'direct', live };
@@ -631,7 +699,7 @@ const tracker = createTracker({
       const seat = (loadPlan().seats || []).find((s) => s.mic === mic);
       const a = seat && config.assign[seat.id];
       if (!seat || !a) { log({ dir: 'info', hex: '', text: `Tracking: micropost ${mic} heeft geen gekoppelde zitplaats met camerapreset` }); return; }
-      const live = (config.brighteye.enabled && config.brighteye.host) ? await pgmSource() : null;
+      const live = switcherOn() ? await pgmSource() : null;
       const alt = pickAlt(a, config.zaal || [], config.assign, live);
       log({ dir: 'info', hex: '', text: `Tracking: micropost ${mic} = ${seat.naam}` });
       broadcast('active', { id: seat.id }); // de UI toont de actieve plaats en de stippellijn, zoals bij een klik
@@ -668,6 +736,7 @@ const thumbErrCount = new Map();
 async function brighteyeThumb(which) {
   const b = config.brighteye;
   const t = b.thumbs || {};
+  if (config.switcher === 'atem') throw new Error('Miniaturen zijn er niet bij de ATEM (enkel via de BrightEye)');
   if (!b.host || t.enabled === false) throw new Error('Miniaturen staan uit of het Brighteye-adres ontbreekt');
   // PGM heeft een eigen bron in de BrightEye (standaard 5); de camera-thumbnails gebruiken het bronnummer van de camera.
   let src; let cam = null;
@@ -720,7 +789,7 @@ const pio = () => presetio.createPresetIO({
 async function presetGuard(camIds) {
   if (presetBusy) throw new Error('Er loopt al een import of export');
   if (tracker.state().enabled) throw new Error("Zet 'Micro volgen' eerst uit: dit hulpmiddel verplaatst de camera's");
-  if (config.brighteye.enabled && config.brighteye.host) {
+  if (switcherOn()) {
     const live = await pgmSource();
     if (live !== null && camIds.includes(live)) throw new Error(`${camById(live).name} staat live op PGM: kies eerst een andere camera op PGM`);
   }
@@ -806,7 +875,7 @@ const handlers = {
   'track:set': (_e, { on }) => { tracker.setEnabled(Boolean(on)); log({ dir: 'info', hex: '', text: `Tracking microposten: ${on ? 'aan' : 'uit'}` }); return tracker.state(); },
   'thumb:get': (_e, { camera }) => brighteyeThumb(camera),
   'cfg:get': () => config,
-  'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); restartMicIfChanged(); return true; },
+  'cfg:save': (_e, next) => { const was = Boolean(config.debug); saveConfig(next); applyDebug(was); restartMicIfChanged(); atemSync(); return true; },
   'plan:get': () => loadPlan(),
   'plan:import': (_e, p) => importPlan(p),
   'plan:save': (_e, p) => savePlan(p),
@@ -831,7 +900,7 @@ const handlers = {
     await sendVisca(camera, visca.zoom(a, dir, speed));
   },
 
-  'program:switch': (_e, { camera, target }) => brighteyeTake(camera, target === 'pvw' ? 'pvw' : 'pgm'),
+  'program:switch': (_e, { camera, target }) => switcherTake(camera, target === 'pvw' ? 'pvw' : 'pgm'),
   'seat:go': (_e, a) => goTo(a),
   'cam:focus': (_e, { camera }) => sendVisca(camera, visca.focusTrigger(camById(camera).viscaAddr)),
   'mic:state': () => ({ ...micState, running: micPoller.running }),
@@ -861,9 +930,9 @@ const handlers = {
     const cam = camById(camera);
     watcher.noteOwnMove(cam.id);
     await sendVisca(cam.id, visca.presetRecall(cam.viscaAddr, n));
-    if (target === 'pvw' || target === 'pgm') await brighteyeTake(cam.id, target);
+    if (target === 'pvw' || target === 'pgm') await switcherTake(cam.id, target);
   },
-  'program:status': () => brighteyeStatus(),
+  'program:status': () => switcherStatus(),
 
   'log:history': () => logBuffer,
   'log:open': () => createLogWindow(),
@@ -881,7 +950,7 @@ const handlers = {
       await new Promise((r) => setTimeout(r, 700));
       for (const c of config.cameras) watcher.ask(c.id);
     }
-    if (config.brighteye.enabled && config.brighteye.host) await brighteyeStatus().catch(fail());
+    if (switcherOn()) await switcherStatus().catch(fail());
   },
   'app:info': () => ({ version: app.getVersion(), dataDir: app.getPath('userData') }),
 
@@ -893,7 +962,7 @@ const handlers = {
     }
     const was = Boolean(config.debug);
     saveConfig(normalizeConfig(b.config));
-    restartMicIfChanged();
+    restartMicIfChanged(); atemSync();
     store.writeWithBackup(planPath(), JSON.stringify(b.plan));
     applyDebug(was);
     return { config, plan: b.plan };
@@ -967,6 +1036,7 @@ app.whenReady().then(() => {
   }
   createWindow();
   restartMicIfChanged();
+  atemSync();
   // Na een (her)start meteen weer micro's volgen als dat zo ingesteld is.
   if (config.tracking?.autoStart && config.micApi?.enabled) { tracker.setEnabled(true); log({ dir: 'info', hex: '', text: 'Tracking microposten: aan (automatisch bij opstarten)' }); }
   // Stille controle op een nieuwe versie (uitschakelbaar in de instellingen). Installeert nooit vanzelf.

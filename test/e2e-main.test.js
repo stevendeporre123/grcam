@@ -52,7 +52,16 @@ const fakeElectron = {
   BrowserWindow: FakeWindow,
 };
 const origLoad = Module._load;
-Module._load = function (request, ...rest) { return request === 'electron' ? fakeElectron : origLoad.call(this, request, ...rest); };
+const EventEmitter = require('events');
+/** Nep-ATEM met dezelfde interface als atem-connection. */
+class FakeAtem extends EventEmitter {
+  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'Nep-ATEM' }, video: { mixEffects: [{ programInput: 5, previewInput: 6 }] } }; }
+  async connect(host) { this.host = host; setTimeout(() => this.emit('connected'), 5); }
+  async disconnect() {}
+  async changeProgramInput(i, me) { this.calls.push(['pgm', i, me]); this.state.video.mixEffects[me].programInput = i; this.emit('stateChanged', this.state, []); }
+  async changePreviewInput(i, me) { this.calls.push(['pvw', i, me]); this.state.video.mixEffects[me].previewInput = i; }
+}
+Module._load = function (request, ...rest) { return request === 'electron' ? fakeElectron : request === 'atem-connection' ? { Atem: FakeAtem } : origLoad.call(this, request, ...rest); };
 
 const quiet = console.log;
 console.log = () => {};
@@ -109,6 +118,7 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   cfg.ipl.host = '127.0.0.1';
   cfg.brighteye = { enabled: true, host: '127.0.0.1', port: 5200, dest: 0, pvwDest: 1 };
   cfg.debug = true;
+  cfg.updateCheck = false; // de stille controle 5 s na het starten zou anders de update-test beïnvloeden
   assert.ok((await call('cfg:save', cfg)).ok);
   await sleep(300);
 
@@ -358,6 +368,36 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   const b5 = JSON.parse(fs.readFileSync(back, 'utf8')).presets[0];
   assert.deepStrictEqual([b5.pan, b5.tilt, b5.zoom], [-500, 120, 7000], 'preset staat nu ook op camera 2');
   assert.ok(!(await call('presetio:import', { file: outJson, map: { 1: 2, 4: 2 } })).ok, 'dubbele doelcamera geweigerd');
+
+  // 4f. Videomixer = ATEM: camera 1-4 gaan naar ingang 5-8, programma volgt de ATEM, geen miniaturen
+  const ac = (await call('cfg:get')).data;
+  assert.strictEqual(ac.cameras[1].atemInput, 6, 'standaard: camera 2 = ingang 6');
+  ac.switcher = 'atem'; ac.atem = { enabled: true, host: '10.9.9.9', me: 0 };
+  ac.brighteye.enabled = false;
+  assert.ok((await call('cfg:save', ac)).ok);
+  await sleep(100);
+  assert.strictEqual(FakeAtem.last.host, '10.9.9.9');
+  events.length = 0;
+  assert.ok((await call('program:switch', { camera: 2 })).ok);
+  assert.ok((await call('program:switch', { camera: 3, target: 'pvw' })).ok);
+  assert.deepStrictEqual(FakeAtem.last.calls, [['pgm', 6, 0], ['pvw', 7, 0]]);
+  assert.ok(logs().some((l) => /ATEM: Camera 2 \(ingang 6\) naar PGM/.test(l.text)), JSON.stringify(logs().slice(-5)));
+  assert.ok(events.some(([c, d]) => c === 'pgm' && d.camera === 2), 'pgm-event');
+  FakeAtem.last.state.video.mixEffects[0].programInput = 8; FakeAtem.last.emit('stateChanged', FakeAtem.last.state, []); // iemand schakelt aan het toestel
+  assert.ok(events.some(([c, d]) => c === 'pgm' && d.camera === 4), 'volgt de ATEM');
+  assert.ok((await call('program:status')).ok);
+  assert.ok(logs().some((l) => /ATEM: programma staat op ingang 8/.test(l.text)));
+  assert.ok(!(await call('thumb:get', { camera: 1 })).ok, 'geen miniaturen bij ATEM');
+  const ag = await call('seat:go', { camera: 1, preset: 3 });
+  assert.ok(ag.ok && ag.data.live === 4, JSON.stringify(ag));
+  await sleep(400); // takeDelayMs (hier 40 ms): daarna schakelt de app camera 1 (ingang 5) naar PGM
+  assert.deepStrictEqual(FakeAtem.last.calls.at(-1), ['pgm', 5, 0]);
+  ac.cameras[0].atemInput = 0;
+  await call('cfg:save', ac);
+  const bad1 = await call('program:switch', { camera: 1 });
+  assert.ok(!bad1.ok && /geen ATEM-ingang/.test(bad1.error), JSON.stringify(bad1));
+  ac.cameras[0].atemInput = 5; ac.switcher = 'brighteye';
+  await call('cfg:save', ac);
 
   // 5. Debug uit: lastPreset niet meer toegestaan
   bad.debug = false;
