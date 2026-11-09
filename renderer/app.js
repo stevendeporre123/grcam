@@ -680,9 +680,12 @@
     if (thumbsOn()) items.push(`<span class="si">${dot(h.thumbs.ok, h.thumbs.detail)}Miniaturen${h.thumbs.ok === false ? ' <b class="bad">fout</b>' : ''}</span>`);
     const seat = trackState.mic != null ? plan?.seats?.find((x) => x.mic === trackState.mic) : null;
     items.push(`<span class="si">${trackState.enabled ? (trackState.paused ? '<span class="sdot warn"></span>Tracking gepauzeerd' : `<span class="sdot ok"></span>Tracking aan${seat ? `: ${esc(seat.naam)}` : ''}`) : '<span class="sdot off"></span>Tracking uit'}</span>`);
+    if (appVersion) items.push(`<span class="si ver" title="Versie van deze app">v${esc(appVersion)}</span>`);
     bar.innerHTML = items.join('');
     bar.classList.toggle('alarm', Boolean(trackState.enabled && (h.cocon.ok === false || bad.length > 0 || h.brighteye.ok === false)));
   }
+  let appVersion = '';
+  api.appInfo().then((r) => { if (r.ok) { appVersion = r.data.version; renderStatus(); } });
   api.onHealth((d) => { healthState = d; renderStatus(); });
   api.healthGet().then((r) => { if (r.ok) { healthState = r.data; renderStatus(); } });
   api.onTrack(showTrack);
