@@ -138,3 +138,12 @@ Hulpmiddelen → *Presets exporteren / importeren*. Bedoeld om alle presets van 
 - De tool weigert te werken als *Micro volgen* aan staat of als een doelcamera live op PGM staat. De camera's bewegen, dus gebruik dit buiten een zitting.
 - **Beperking**: enkel wat VISCA kan uitlezen zit erin (pan/tilt, zoom, focus). Belichting, witbalans en andere beeldinstellingen horen niet bij een VISCA-preset en moeten op de nieuwe camera apart ingesteld worden.
 - Niet geverifieerd op echte Lumens-hardware: antwoorden op de positie-inquiries, de wachttijd tot de camera stilstaat en het terugzetten van de focus. Test eerst met één preset.
+
+## Videomixer: BrightEye of ATEM
+
+Beheer → Instellingen → *Videomixer*: kies **BrightEye NXT-430** (zoals voorheen) of **Blackmagic ATEM**.
+
+- **ATEM**: vul het IP-adres in en zet *Inschakelen* aan (UDP-poort 9910, geen andere instellingen nodig; de ATEM en de PC moeten in hetzelfde netwerk zitten). Per camera stel je de *ATEM-ingang* in; standaard camera 1–4 = ingang 5–8. *Mixer (M/E)* is 0 voor een Television Studio HD.
+- PGM is een harde cut (`changeProgramInput`), PVW zet de ingang op preview. De app volgt de ATEM zelf: schakelt iemand aan het toestel, dan verandert ook de PGM-aanduiding en het alternatief-/tracking-gedrag meteen mee.
+- Miniaturen bestaan alleen bij de BrightEye en verdwijnen bij de ATEM; de statusbalk toont dan "ATEM" in plaats van "BrightEye".
+- Gebruikt de bibliotheek `atem-connection` (wordt enkel geladen als de ATEM gekozen is). Niet getest op een echte ATEM: controleer bij de eerste keer de ingangsnummers met *Test alle camera's* (toont de programma-/previewingang in het log) en met de knop Preset uitproberen → PVW.
