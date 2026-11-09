@@ -180,6 +180,13 @@
         <label><input name="aEnabled" type="checkbox"> Inschakelen</label>
         <label>Host / IP-adres <input name="aHost" type="text"></label>
         <label>Mixer (M/E, telt vanaf 0; bij een ATEM Television Studio HD is dat 0) <input name="aMe" type="number" min="0" max="3"></label>
+        <button type="button" id="aTest">Test: verbinden en ingangen tonen (zie log)</button>
+        <div class="toolrow">
+          <label>Ingang <input id="aTestIn" type="number" min="1" value="1000" title="1000 = kleurbalken, 0-8 zijn de ingangen; handig zonder camera's"></label>
+          <button type="button" id="aTestPvw">Naar PVW</button>
+          <button type="button" id="aTestPgm">Naar PGM</button>
+        </div>
+        <p class="hint">Zonder camera's: ingang 1000 (kleurbalken) naar PGM is zichtbaar op de programma-uitgang of multiview van de ATEM. Zet liefst eerst PVW.</p>
       </fieldset>
       <fieldset>
         <legend>Brighteye NXT-430 (optioneel)</legend>

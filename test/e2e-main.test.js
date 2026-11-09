@@ -55,7 +55,7 @@ const origLoad = Module._load;
 const EventEmitter = require('events');
 /** Nep-ATEM met dezelfde interface als atem-connection. */
 class FakeAtem extends EventEmitter {
-  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'Nep-ATEM' }, video: { mixEffects: [{ programInput: 5, previewInput: 6 }] } }; }
+  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'Nep-ATEM' }, inputs: { 1: { inputId: 1, longName: 'SDI 1', shortName: 'S1', externalPortType: 1, internalPortType: 0 }, 5: { inputId: 5, longName: 'HDMI 1', shortName: 'H1', externalPortType: 2, internalPortType: 0 }, 1000: { inputId: 1000, longName: 'Color Bars', shortName: 'Bars', externalPortType: 256, internalPortType: 2 } }, settings: { videoMode: 7 }, video: { mixEffects: [{ programInput: 5, previewInput: 6 }] } }; }
   async connect(host) { this.host = host; setTimeout(() => this.emit('connected'), 5); }
   async disconnect() {}
   async changeProgramInput(i, me) { this.calls.push(['pgm', i, me]); this.state.video.mixEffects[me].programInput = i; this.emit('stateChanged', this.state, []); }
@@ -392,6 +392,14 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(ag.ok && ag.data.live === 4, JSON.stringify(ag));
   await sleep(400); // takeDelayMs (hier 40 ms): daarna schakelt de app camera 1 (ingang 5) naar PGM
   assert.deepStrictEqual(FakeAtem.last.calls.at(-1), ['pgm', 5, 0]);
+  // ATEM-test zonder camera's: verbinden + ingangen tonen, en kleurbalken (1000) naar PVW
+  const t1 = await call('atem:test', { host: '10.9.9.8', me: 0 });
+  assert.ok(t1.ok && t1.data.inputs.length === 3 && FakeAtem.last.host === '10.9.9.8', JSON.stringify(t1));
+  assert.ok(logs().some((l) => /ATEM-test: ingangen: 1 "SDI 1" \(SDI\), 5 "HDMI 1" \(HDMI\), 1000 "Color Bars" \(kleurbalken\)/.test(l.text)), JSON.stringify(logs().slice(-6)));
+  const t2 = await call('atem:test', { host: '10.9.9.8', input: 1000, target: 'pvw' });
+  assert.ok(t2.ok && t2.data.preview === 1000, JSON.stringify(t2));
+  assert.ok(!(await call('atem:test', { host: '' })).ok, 'host verplicht');
+  assert.ok(!(await call('atem:test', { host: '10.9.9.8', input: 0 })).ok, 'ongeldige ingang');
   ac.cameras[0].atemInput = 0;
   await call('cfg:save', ac);
   const bad1 = await call('program:switch', { camera: 1 });

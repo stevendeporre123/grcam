@@ -147,3 +147,7 @@ Beheer → Instellingen → *Videomixer*: kies **BrightEye NXT-430** (zoals voor
 - PGM is een harde cut (`changeProgramInput`), PVW zet de ingang op preview. De app volgt de ATEM zelf: schakelt iemand aan het toestel, dan verandert ook de PGM-aanduiding en het alternatief-/tracking-gedrag meteen mee.
 - Miniaturen bestaan alleen bij de BrightEye en verdwijnen bij de ATEM; de statusbalk toont dan "ATEM" in plaats van "BrightEye".
 - Gebruikt de bibliotheek `atem-connection` (wordt enkel geladen als de ATEM gekozen is). Niet getest op een echte ATEM: controleer bij de eerste keer de ingangsnummers met *Test alle camera's* (toont de programma-/previewingang in het log) en met de knop Preset uitproberen → PVW.
+
+### ATEM testen zonder camera's
+
+Beheer → Instellingen → ATEM: **Test: verbinden en ingangen tonen** verbindt tijdelijk met het ingevulde adres (ook vóór je bewaart) en zet in het log: model, videoformaat, wat er op programma en preview staat en alle ingangen met hun naam en type (SDI/HDMI/intern). Met het veld *Ingang* en de knoppen *Naar PVW* / *Naar PGM* stuur je een ingang door, bv. **1000 = kleurbalken**, zichtbaar op de programma-uitgang of multiview. Zo kan je de verbinding, de firewall en de ingangsnummers controleren voor er een camera hangt. Een lege HDMI-ingang kan je ook schakelen (je ziet dan zwart).

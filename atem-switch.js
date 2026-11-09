@@ -11,9 +11,9 @@
 const CONNECT_WAIT_MS = 4000;
 
 /**
- * @param {{ Atem: new () => any, log?: (msg:string)=>void, onProgram?: (input:number|null)=>void, onHealth?: (ok:boolean, detail:string)=>void }} deps
+ * @param {{ Atem: new () => any, Enums?: any, log?: (msg:string)=>void, onProgram?: (input:number|null)=>void, onHealth?: (ok:boolean, detail:string)=>void }} deps
  */
-function createAtemSwitch({ Atem, log = () => {}, onProgram = () => {}, onHealth = () => {} }) {
+function createAtemSwitch({ Atem, Enums = null, log = () => {}, onProgram = () => {}, onHealth = () => {} }) {
   let atem = null;
   let host = '';
   let me = 0;
@@ -52,7 +52,7 @@ function createAtemSwitch({ Atem, log = () => {}, onProgram = () => {}, onHealth
     const t0 = Date.now();
     while (!connected) {
       if (!atem) throw new Error('ATEM-koppeling is niet ingesteld (Beheer → Instellingen)');
-      if (Date.now() - t0 > CONNECT_WAIT_MS) throw new Error(`ATEM ${host} is niet bereikbaar (geen antwoord op UDP 9910): controleer het IP-adres en het netwerk`);
+      if (Date.now() - t0 > CONNECT_WAIT_MS) throw new Error(`ATEM ${host} is niet bereikbaar (geen antwoord op UDP 9910): controleer het IP-adres, het netwerk en of UDP 9910 niet geblokkeerd wordt`);
       await new Promise((r) => setTimeout(r, 50));
     }
   }
@@ -74,7 +74,25 @@ function createAtemSwitch({ Atem, log = () => {}, onProgram = () => {}, onHealth
   const preview = () => (connected ? (atem.state?.video?.mixEffects?.[me]?.previewInput ?? null) : null);
   const isConnected = () => connected;
 
-  return { connect, close, take, program, preview, isConnected, ready };
+  const PORT = { 1: 'SDI', 2: 'HDMI', 4: 'Component', 8: 'Composite', 16: 'S-Video', 256: 'intern' };
+  const INTERNAL = { 0: '', 1: 'zwart', 2: 'kleurbalken', 3: 'kleur', 4: 'media player', 5: 'media player key', 6: 'SuperSource', 128: 'M/E-uitgang', 129: 'aux', 130: 'mask', 131: 'multiviewer', 132: 'audiomonitor' };
+  /** Leesbare toestand voor het testscherm: model, videoformaat, ingangen en wat er op programma/preview staat. */
+  function info() {
+    const st = atem?.state;
+    if (!connected || !st) return null;
+    const inputs = Object.values(st.inputs || {}).map((i) => ({
+      id: i.inputId, name: i.longName, short: i.shortName,
+      type: i.internalPortType === 0 ? (PORT[i.externalPortType] || '') : (INTERNAL[i.internalPortType] || ''),
+    })).sort((a, b) => a.id - b.id);
+    const vm = st.settings?.videoMode;
+    return {
+      model: st.info?.productIdentifier || '', protocol: st.info?.apiVersion != null ? String(st.info.apiVersion) : '',
+      videoMode: vm != null ? (Enums?.VideoMode?.[vm] ?? String(vm)) : '',
+      program: programOf(st), preview: st.video?.mixEffects?.[me]?.previewInput ?? null, inputs,
+    };
+  }
+
+  return { connect, close, take, program, preview, isConnected, ready, info };
 }
 
 module.exports = { createAtemSwitch };

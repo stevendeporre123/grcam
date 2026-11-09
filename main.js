@@ -505,6 +505,7 @@ const atemSwitch = () => {
   if (!atemClient) {
     atemClient = atemSw.createAtemSwitch({
       Atem: require('atem-connection').Atem,
+      Enums: require('atem-connection').Enums,
       log: (msg) => log({ dir: 'info', hex: '', text: msg }),
       onHealth: (ok, detail) => setHealth('brighteye', ok, detail), // één statusslot voor "de videomixer"
       onProgram: (input) => {
@@ -909,6 +910,36 @@ const handlers = {
   'mic:off': (_e, { seat }) => { const { micOff } = require('./mic-api'); return micOff(micCfg(), seat, micFetch()).then(() => log({ dir: 'info', hex: '', text: `Micropost ${seat} uitgeschakeld` })); },
   'mic:muteAll': () => { const { micMuteAll } = require('./mic-api'); return micMuteAll(micCfg(), micFetch()).then(() => log({ dir: 'info', hex: '', text: 'Alle microposten uitgeschakeld' })); },
   // Eén keer verbinden met de CoCon API en de huidige microfoonstand tonen (om de instelling te controleren).
+  // ATEM testen zonder camera's: verbinden, ingangen en stand tonen, en optioneel een ingang naar PGM/PVW sturen (ook 1000 = kleurbalken).
+  'atem:test': async (_e, { host, me, input, target }) => {
+    const h = cleanHost(host);
+    if (!h) throw new Error('Vul eerst het IP-adres van de ATEM in');
+    const say = (text, dir = 'info') => log({ dir, hex: '', text });
+    const lib = require('atem-connection');
+    const sw = atemSw.createAtemSwitch({ Atem: lib.Atem, Enums: lib.Enums, log: (m) => say(`ATEM-test: ${m}`), onHealth: (ok, d) => { if (!ok) say(`ATEM-test: ${d}`, 'err'); } });
+    const nm = (i) => (i == null ? 'onbekend' : String(i));
+    const describe = (x) => `ATEM-test: ${x.model || 'ATEM'}, videoformaat ${x.videoMode || 'onbekend'}; programma op ingang ${nm(x.program)}, preview op ingang ${nm(x.preview)}`;
+    say(`ATEM-test: verbinden met ${h} (UDP 9910)…`);
+    try {
+      sw.connect(h, Number(me) || 0);
+      await sw.ready();
+      let x = sw.info();
+      say(describe(x));
+      say(`ATEM-test: ingangen: ${x.inputs.map((i) => `${i.id} "${i.name}"${i.type ? ` (${i.type})` : ''}`).join(', ')}`);
+      if (input !== undefined && input !== null && input !== '') {
+        const n = Number(input);
+        if (!Number.isInteger(n) || n < 1) throw new Error('Ingangsnummer moet een geheel getal zijn (1000 = kleurbalken)');
+        await sw.take(n, target === 'pvw' ? 'pvw' : 'pgm');
+        await sleep(200);
+        x = sw.info();
+        say(`ATEM-test: ingang ${n} naar ${target === 'pvw' ? 'PVW' : 'PGM'} gestuurd. ${describe(x)}`);
+      }
+      return x;
+    } catch (e) {
+      say(`ATEM-test mislukt: ${e.message}`, 'err');
+      throw e;
+    } finally { sw.close(); }
+  },
   'mic:test': async (_e, c) => {
     const { probe } = require('./mic-api');
     const host = cleanHost(c?.host);

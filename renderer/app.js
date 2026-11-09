@@ -774,6 +774,18 @@
     cfg.micApi = { enabled: f.mEnabled.checked, host: clean(f.mHost.value), port: Number(f.mPort.value) || 8890 };
     await persist();
   });
+  // ATEM testen: verbinden, ingangen/stand in het log, en een ingang (bv. 1000 = kleurbalken) naar PVW of PGM sturen
+  const atemTest = async (target) => {
+    const f = $id('formSettings');
+    const clean = (v) => v.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '');
+    const body = { host: clean(f.aHost.value), me: Number(f.aMe.value) || 0 };
+    if (target) { body.input = Number($id('aTestIn').value); body.target = target; if (target === 'pgm' && !confirm(`Ingang ${body.input} LIVE op PGM zetten?`)) return; }
+    const r = await run(api.atemTest(body));
+    if (r.ok) toast(target ? `ATEM: ingang ${body.input} naar ${target.toUpperCase()}` : `ATEM verbonden: ${r.data.model || 'ok'} (zie log)`);
+  };
+  $id('aTest').addEventListener('click', () => atemTest(null));
+  $id('aTestPvw').addEventListener('click', () => atemTest('pvw'));
+  $id('aTestPgm').addEventListener('click', () => atemTest('pgm'));
   $id('mTest').addEventListener('click', async () => {
     const f = $id('formSettings');
     const clean = (v) => v.trim().replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '');
