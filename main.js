@@ -616,7 +616,7 @@ async function pgmSource() {
  * - Dezelfde camera zonder alternatief: enkel de preset oproepen (de camera is al live).
  * De opdracht is meteen terug na het oproepen; het vervolg loopt op de achtergrond en vervalt bij een nieuwe klik.
  * @param {{camera:number, preset:number, alt?:{camera:number,preset:number}}} a
- * @returns {Promise<{mode:'direct'|'alt'|'zonder-take', live:number|null}>}
+ * @returns {Promise<{mode:'direct'|'alt'|'zonder-take', live:number|null, warning?:string|null}>}
  */
 async function goTo({ camera, preset, alt }) {
   const my = ++goSeq;
@@ -627,30 +627,35 @@ async function goTo({ camera, preset, alt }) {
   const useAlt = Boolean(take && alt && alt.camera !== cam.id && live === cam.id);
   const failed = (e) => log({ dir: 'err', camera: cam.id, hex: '', text: e.message });
   watcher.noteOwnMove(cam.id);
+  // Een camera die niet antwoordt (IPL uit, camera defect, of nog niet aangesloten) mag het schakelen niet blokkeren:
+  // de fout komt in het log en de videomixer schakelt toch.
+  let warning = null;
+  const recall = async (c, p) => {
+    try { await sendVisca(c.id, visca.presetRecall(c.viscaAddr, p)); }
+    catch (e) { warning = `${c.name}: preset ${p} oproepen mislukt (${e.message})`; log({ dir: 'err', camera: c.id, hex: '', text: `${warning}${take ? '; de ' + switcherName() + ' schakelt toch' : ''}` }); if (!take) throw e; }
+  };
+  log({ dir: 'info', camera: cam.id, hex: '', text: `Klik: ${cam.name} preset ${preset}${take ? ` (${switcherName()} actief, PGM nu ${live ? camById(live).name : 'onbekend'})` : ' (geen videomixer ingesteld)'}` });
   if (useAlt) {
     const ac = camById(alt.camera);
     log({ dir: 'info', camera: cam.id, hex: '', text: `${cam.name} staat al live: eerst ${ac.name} (preset ${alt.preset}) op PGM, daarna ${cam.name} (preset ${preset})` });
-    await Promise.all([
-      sendVisca(ac.id, visca.presetRecall(ac.viscaAddr, alt.preset)),
-      sendVisca(cam.id, visca.presetRecall(cam.viscaAddr, preset)),
-    ]);
+    await Promise.all([recall(ac, alt.preset), recall(cam, preset)]);
     (async () => {
-      await sleep(Number(t.takeDelayMs ?? 1500)); if (my !== goSeq) return;
+      await sleep(warning ? 0 : Number(t.takeDelayMs ?? 1500)); // camera onbereikbaar: niet wachten tot ze in positie staat if (my !== goSeq) return;
       await switcherTake(ac.id, 'pgm'); if (my !== goSeq) return;
       await sleep(Number(t.altHoldMs ?? 4000)); if (my !== goSeq) return;
       await switcherTake(cam.id, 'pgm');
     })().catch(failed);
-    return { mode: 'alt', live };
+    return { mode: 'alt', live, warning };
   }
-  await sendVisca(cam.id, visca.presetRecall(cam.viscaAddr, preset));
+  await recall(cam, preset);
   if (!take) return { mode: 'zonder-take', live };
   if (live !== cam.id) {
     (async () => {
-      await sleep(Number(t.takeDelayMs ?? 1500)); if (my !== goSeq) return;
+      await sleep(warning ? 0 : Number(t.takeDelayMs ?? 1500)); // camera onbereikbaar: niet wachten tot ze in positie staat if (my !== goSeq) return;
       await switcherTake(cam.id, 'pgm');
     })().catch(failed);
   }
-  return { mode: 'direct', live };
+  return { mode: 'direct', live, warning };
 }
 
 // ---------- Microposten-API (long polling) ----------

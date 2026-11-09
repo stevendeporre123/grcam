@@ -255,7 +255,8 @@
     activeId = id; markActive(); // meteen tonen wat je gekozen hebt; bij een fout hieronder terugzetten
     const r = await run(api.seatGo({ camera: a.camera, preset: a.preset, alt: a.alt }));
     if (!r.ok) { activeId = null; markActive(); return; }
-    if (r.data?.mode === 'alt') toast(`${camName(a.camera)} staat al live: eerst ${camName(a.alt.camera)}, straks ${camName(a.camera)}`);
+    if (r.data?.warning) toast(`${r.data.warning}; mixer schakelt toch`);
+    else if (r.data?.mode === 'alt') toast(`${camName(a.camera)} staat al live: eerst ${camName(a.alt.camera)}, straks ${camName(a.camera)}`);
   }
 
   /**

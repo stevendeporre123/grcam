@@ -392,6 +392,18 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(ag.ok && ag.data.live === 4, JSON.stringify(ag));
   await sleep(400); // takeDelayMs (hier 40 ms): daarna schakelt de app camera 1 (ingang 5) naar PGM
   assert.deepStrictEqual(FakeAtem.last.calls.at(-1), ['pgm', 5, 0]);
+  // Camera onbereikbaar (poort dicht): de preset-fout komt in het log, maar de ATEM schakelt toch
+  const mainAtem = FakeAtem.last;
+  const goodPort = ac.cameras[2].port;
+  ac.cameras[2].port = 1;
+  await call('cfg:save', ac);
+  const nc = await call('seat:go', { camera: 3, preset: 4 });
+  assert.ok(nc.ok && /oproepen mislukt/.test(nc.data.warning), JSON.stringify(nc));
+  await sleep(300);
+  assert.deepStrictEqual(mainAtem.calls.at(-1), ['pgm', 7, 0], 'ATEM schakelt ondanks de camerafout');
+  assert.ok(logs().some((l) => /oproepen mislukt.*ATEM schakelt toch/.test(l.text)));
+  ac.cameras[2].port = goodPort;
+  await call('cfg:save', ac);
   // ATEM-test zonder camera's: verbinden + ingangen tonen, en kleurbalken (1000) naar PVW
   const t1 = await call('atem:test', { host: '10.9.9.8', me: 0 });
   assert.ok(t1.ok && t1.data.inputs.length === 3 && FakeAtem.last.host === '10.9.9.8', JSON.stringify(t1));
