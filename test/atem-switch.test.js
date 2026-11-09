@@ -6,7 +6,7 @@ const EventEmitter = require('events');
 const { createAtemSwitch } = require('../atem-switch');
 
 class FakeAtem extends EventEmitter {
-  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'ATEM Television Studio HD' }, video: { mixEffects: [{ programInput: 1, previewInput: 2 }] } }; }
+  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'ATEM Television Studio HD', apiVersion: 131100 }, inputs: { 1: { inputId: 1, longName: 'SDI 1', shortName: 'S1', externalPortType: 1, internalPortType: 0 }, 5: { inputId: 5, longName: 'HDMI 1', shortName: 'H1', externalPortType: 2, internalPortType: 0 }, 1000: { inputId: 1000, longName: 'Color Bars', shortName: 'Bars', externalPortType: 256, internalPortType: 2 } }, settings: { videoMode: 7 }, video: { mixEffects: [{ programInput: 1, previewInput: 2 }] } }; }
   async connect(host) { this.host = host; setTimeout(() => this.emit('connected'), 5); }
   async disconnect() { this.disconnected = true; }
   async changeProgramInput(i, me) { this.calls.push(['pgm', i, me]); this.state.video.mixEffects[me].programInput = i; this.emit('stateChanged', this.state, ['video.mixEffects.0.programInput']); }
@@ -24,6 +24,10 @@ class FakeAtem extends EventEmitter {
   assert.deepStrictEqual(health.at(-1), [true, '']);
   assert.ok(logs.some((l) => /ATEM verbonden \(ATEM Television Studio HD\)/.test(l)));
   assert.strictEqual(sw.program(), 1);
+  const inf = sw.info();
+  assert.strictEqual(inf.model, 'ATEM Television Studio HD');
+  assert.deepStrictEqual(inf.inputs.map((i) => [i.id, i.name, i.type]), [[1, 'SDI 1', 'SDI'], [5, 'HDMI 1', 'HDMI'], [1000, 'Color Bars', 'kleurbalken']]);
+  assert.strictEqual([inf.program, inf.preview].join(), '1,2');
   await sw.take(6, 'pgm');
   await sw.take(7, 'pvw');
   assert.deepStrictEqual(FakeAtem.last.calls, [['pgm', 6, 0], ['pvw', 7, 0]]);
