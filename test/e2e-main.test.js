@@ -55,10 +55,11 @@ const origLoad = Module._load;
 const EventEmitter = require('events');
 /** Nep-ATEM met dezelfde interface als atem-connection. */
 class FakeAtem extends EventEmitter {
-  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'Nep-ATEM' }, inputs: { 1: { inputId: 1, longName: 'SDI 1', shortName: 'S1', externalPortType: 1, internalPortType: 0 }, 5: { inputId: 5, longName: 'HDMI 1', shortName: 'H1', externalPortType: 2, internalPortType: 0 }, 1000: { inputId: 1000, longName: 'Color Bars', shortName: 'Bars', externalPortType: 256, internalPortType: 2 } }, settings: { videoMode: 7 }, video: { mixEffects: [{ programInput: 5, previewInput: 6 }] } }; }
+  constructor() { super(); FakeAtem.last = this; this.calls = []; this.state = { info: { productIdentifier: 'Nep-ATEM' }, inputs: { 1: { inputId: 1, longName: 'SDI 1', shortName: 'S1', externalPortType: 1, internalPortType: 0 }, 5: { inputId: 5, longName: 'HDMI 1', shortName: 'H1', externalPortType: 2, internalPortType: 0 }, 1000: { inputId: 1000, longName: 'Color Bars', shortName: 'Bars', externalPortType: 256, internalPortType: 2 } }, audio: { channels: { 1001: { gain: -6, mixOption: 1, portType: 32 } } }, settings: { videoMode: 7 }, video: { mixEffects: [{ programInput: 5, previewInput: 6 }] } }; }
   async connect(host) { this.host = host; setTimeout(() => this.emit('connected'), 5); }
   async disconnect() {}
   async changeProgramInput(i, me) { this.calls.push(['pgm', i, me]); this.state.video.mixEffects[me].programInput = i; this.emit('stateChanged', this.state, []); }
+  async setClassicAudioMixerInputProps(i, props) { this.calls.push(['audio', i, props]); Object.assign(this.state.audio.channels[i], props); this.emit('stateChanged', this.state, [`audio.channels.${i}`]); }
   async changePreviewInput(i, me) { this.calls.push(['pvw', i, me]); this.state.video.mixEffects[me].previewInput = i; }
 }
 Module._load = function (request, ...rest) { return request === 'electron' ? fakeElectron : request === 'atem-connection' ? { Atem: FakeAtem } : origLoad.call(this, request, ...rest); };
@@ -392,6 +393,14 @@ const logsReset = () => { for (let i = events.length - 1; i >= 0; i--) if (event
   assert.ok(ag.ok && ag.data.live === 4, JSON.stringify(ag));
   await sleep(400); // takeDelayMs (hier 40 ms): daarna schakelt de app camera 1 (ingang 5) naar PGM
   assert.deepStrictEqual(FakeAtem.last.calls.at(-1), ['pgm', 5, 0]);
+  // Audio: XLR-volume en dempen via de ATEM
+  const au = await call('audio:get');
+  assert.deepStrictEqual(au.data, { id: 1001, gain: -6, on: true });
+  events.length = 0;
+  assert.ok((await call('audio:set', { gain: -10 })).ok);
+  assert.ok((await call('audio:set', { on: false })).ok);
+  assert.ok(events.some(([c, d]) => c === 'audio' && d.gain === -10), 'audio-event');
+  assert.deepStrictEqual((await call('audio:get')).data, { id: 1001, gain: -10, on: false });
   // Camera onbereikbaar (poort dicht): de preset-fout komt in het log, maar de ATEM schakelt toch
   const mainAtem = FakeAtem.last;
   const goodPort = ac.cameras[2].port;

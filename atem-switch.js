@@ -11,9 +11,9 @@
 const CONNECT_WAIT_MS = 4000;
 
 /**
- * @param {{ Atem: new () => any, Enums?: any, log?: (msg:string)=>void, onProgram?: (input:number|null)=>void, onHealth?: (ok:boolean, detail:string)=>void }} deps
+ * @param {{ Atem: new () => any, Enums?: any, onAudio?: (a:object|null)=>void, log?: (msg:string)=>void, onProgram?: (input:number|null)=>void, onHealth?: (ok:boolean, detail:string)=>void }} deps
  */
-function createAtemSwitch({ Atem, Enums = null, log = () => {}, onProgram = () => {}, onHealth = () => {} }) {
+function createAtemSwitch({ Atem, Enums = null, log = () => {}, onProgram = () => {}, onHealth = () => {}, onAudio = () => {} }) {
   let atem = null;
   let host = '';
   let me = 0;
@@ -34,10 +34,15 @@ function createAtemSwitch({ Atem, Enums = null, log = () => {}, onProgram = () =
       log(`ATEM verbonden${model ? ` (${model})` : ''}`);
       onHealth(true, '');
       onProgram(programOf(atem.state));
+      onAudio(audio());
     });
     atem.on('disconnected', () => { connected = false; onHealth(false, `ATEM ${address} is niet bereikbaar of de verbinding viel weg`); });
     atem.on('error', (msg) => log(`ATEM-fout: ${msg}`));
-    atem.on('stateChanged', (state) => { if (connected) onProgram(programOf(state)); });
+    atem.on('stateChanged', (state, paths) => {
+      if (!connected) return;
+      onProgram(programOf(state));
+      if ((paths || []).some((p) => String(p).startsWith('audio'))) onAudio(audio());
+    });
     atem.connect(address).catch((e) => { onHealth(false, `ATEM ${address}: ${e.message}`); });
   }
 
@@ -92,7 +97,32 @@ function createAtemSwitch({ Atem, Enums = null, log = () => {}, onProgram = () =
     };
   }
 
-  return { connect, close, take, program, preview, isConnected, ready, info };
+  /** Audio-ingang waarop de volumeregeling werkt: de XLR (bron 1001) van de klassieke audiomixer. */
+  const XLR = 1001;
+  const channelOf = () => atem?.state?.audio?.channels?.[XLR] ?? null;
+  /**
+   * Stand van de XLR-ingang: `gain` in dB (-100 = uit/-oneindig), `on` = niet gedempt.
+   * @returns {{id:number, gain:number, on:boolean}|null} null als er geen klassieke audiomixer / XLR is
+   */
+  function audio() {
+    const ch = connected ? channelOf() : null;
+    if (!ch) return null;
+    return { id: XLR, gain: Number.isFinite(ch.gain) ? Math.round(ch.gain * 10) / 10 : -100, on: ch.mixOption !== 0 };
+  }
+  /**
+   * Zet het volume en/of het dempen van de XLR-ingang.
+   * @param {{gain?:number, on?:boolean}} p gain in dB (-60 of lager = oneindig stil, max +6)
+   */
+  async function setAudio({ gain, on }) {
+    await ready();
+    if (!channelOf()) throw new Error('Deze ATEM heeft geen klassieke audiomixer met XLR-ingang (bron 1001)');
+    const props = {};
+    if (gain !== undefined) { const g = Number(gain); if (!Number.isFinite(g)) throw new Error('Ongeldig volume'); props.gain = g <= -60 ? -Infinity : Math.min(6, g); }
+    if (on !== undefined) props.mixOption = on ? 1 : 0; // 1 = aan, 0 = uit (gedempt)
+    await atem.setClassicAudioMixerInputProps(XLR, props);
+  }
+
+  return { connect, close, take, program, preview, isConnected, ready, info, audio, setAudio };
 }
 
 module.exports = { createAtemSwitch };

@@ -158,6 +158,10 @@ dialog.tools .dbg { margin:8px 0 0; flex-direction:row; align-items:center; }
 .savepre { width:100%; margin-top:8px; }
 
 .statusbar { display:flex; flex-wrap:wrap; align-items:center; gap:4px 18px; padding:6px 16px; border-top:1px solid var(--line); background:#10141a; font-size:13px; color:#b8c0cc; }
+.audio { margin:12px 0 4px; }
+.audio .audiohead { display:flex; justify-content:space-between; font-size:13px; color:#b8c0cc; margin-bottom:4px; }
+.audio .audiorow { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
+.audio button.muted { background:#7f1d1d; border-color:#b91c1c; color:#fff; }
 .statusbar .ver { margin-left:auto; color:#6b7686; font-size:12px; }
 .statusbar.alarm { background:#3b1212; border-top-color:#7f1d1d; }
 .statusbar .si, .statusbar .sgrp { display:inline-flex; align-items:center; gap:6px; }

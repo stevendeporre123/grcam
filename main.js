@@ -508,6 +508,7 @@ const atemSwitch = () => {
       Enums: require('atem-connection').Enums,
       log: (msg) => log({ dir: 'info', hex: '', text: msg }),
       onHealth: (ok, detail) => setHealth('brighteye', ok, detail), // één statusslot voor "de videomixer"
+      onAudio: (a) => broadcast('audio', a),
       onProgram: (input) => {
         const cam = input == null ? null : config.cameras.find((c) => Number(c.atemInput) === input);
         pgmCam = cam ? cam.id : null;
@@ -969,6 +970,13 @@ const handlers = {
     if (target === 'pvw' || target === 'pgm') await switcherTake(cam.id, target);
   },
   'program:status': () => switcherStatus(),
+  // Audio (XLR-ingang van de ATEM): volume in dB en dempen
+  'audio:get': () => { if (config.switcher !== 'atem' || !switcherOn()) return null; atemSync(); return atemSwitch().audio(); },
+  'audio:set': async (_e, { gain, on }) => {
+    if (config.switcher !== 'atem' || !switcherOn()) throw new Error('Audio kan enkel bij een ingeschakelde ATEM');
+    atemSync();
+    await atemSwitch().setAudio({ gain, on });
+  },
 
   'log:history': () => logBuffer,
   'log:open': () => createLogWindow(),
