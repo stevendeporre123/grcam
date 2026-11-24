@@ -22,6 +22,15 @@ assert.strictEqual(new Set(ids).size, ids.length);
 const { html, viewBox } = buildPlanSvg(plan, { z4: { camera: 2, preset: 21 } });
 assert.strictEqual((html.match(/class="seat /g) || []).length, plan.seats.length);
 assert.ok(html.includes('camera 2, preset 21'));
+
+// micropostnummer: label alleen bij zetels met een gekoppelde mic, ook in het gedraaide zicht
+assert.strictEqual((html.match(/class="micbadge"/g) || []).length, plan.seats.filter((s) => s.mic != null).length);
+const withMic = { ...plan, seats: plan.seats.map((s, i) => (i < 2 ? { ...s, mic: i === 0 ? 7 : 112 } : s)) };
+for (const v of ['zaal', 'ambtenaren']) {
+  const m = buildPlanSvg(withMic, {}, { view: v }).html;
+  assert.strictEqual((m.match(/class="micbadge"/g) || []).length, 2, v);
+  assert.ok(/class="micbadge"[^>]*><rect[^>]*\/><text[^>]*>7<\/text>/.test(m) && />112<\/text>/.test(m), v);
+}
 assert.ok(viewBox.split(' ').length === 4);
 const speakers = plan.seats.filter(isSpeaker);
 assert.ok(speakers.length > 50 && speakers.length < plan.seats.length);
