@@ -33,6 +33,17 @@
    * @returns {{viewBox:string, html:string, flip:boolean, mx:number, my:number}} viewBox-waarde, SVG-elementen en
    *   het spiegelpunt (nodig om schermpositie terug naar plan-coördinaten om te rekenen)
    */
+  /** Klein label met het gekoppelde micropostnummer, over de bovenrechterhoek van de zetel. */
+  function micBadge(s) {
+    if (s.mic == null || s.mic === '') return '';
+    const txt = String(s.mic);
+    const w = Math.max(10, txt.length * 4.6 + 5);
+    const x = s.w / 2 - w + 2;
+    const y = -s.h / 2 - 3.5;
+    return `<g class="micbadge" pointer-events="none"><rect x="${x.toFixed(1)}" y="${y}" width="${w.toFixed(1)}" height="8" rx="2.5"/>` +
+      `<text x="${(x + w / 2).toFixed(1)}" y="${y + 6}" font-size="6.5" font-weight="700" text-anchor="middle">${esc(txt)}</text></g>`;
+  }
+
   function buildPlanSvg(plan, assign, opts = {}) {
     const fr = Object.fromEntries(plan.fracties.map((f) => [f.key, f.kleur]));
     const { bg, decor } = plan;
@@ -71,6 +82,7 @@
         (a ? `<rect x="${-s.w / 2}" y="${-s.h / 2}" width="${s.w}" height="${s.h}" rx="2" fill="${camColor(a.camera)}" fill-opacity="0.32" pointer-events="none"/>` : '') +
         line(s.naam, two ? -1.5 : fs * 0.35, fs) +
         line(s.regel2, 8, Math.max(6, fs - 1)) +
+        micBadge(s) +
         '</g>';
     }
 

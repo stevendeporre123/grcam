@@ -45,6 +45,10 @@ h1 { font-size:17px; margin:0; } h2 { font-size:15px; margin:0 0 8px; } h3 { mar
 .seat { cursor:pointer; } .seat.off { cursor:default; opacity:.35; }
 .seat text { fill:#e6e9ee; pointer-events:none; font-family:system-ui, "Segoe UI", sans-serif; }
 .seat.free text { fill:#8a93a1; }
+.seat .micbadge rect { fill:#334155; stroke:#0b0d10; stroke-width:.6; }
+.seat .micbadge text { fill:#e2e8f0; }
+.seat.mic-on .micbadge rect { fill:#ef4444; }
+.seat.mic-on .micbadge text { fill:#fff; }
 .seat:not(.off):hover .base { stroke-opacity:1; filter:brightness(1.4); }
 .seat.active .base { stroke:var(--act,#fff) !important; stroke-width:4.2 !important; filter:drop-shadow(0 0 6px var(--act,#fff)); animation:pulse 1.3s ease-in-out infinite; }
 @keyframes pulse { 50% { stroke-width:6; filter:drop-shadow(0 0 12px var(--act,#fff)); } }
